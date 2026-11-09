@@ -17,10 +17,12 @@ function newestFirstLines(log: string): string {
   return withoutFinalNewline.split('\n').reverse().join('\n')
 }
 
-function appAccessURL(base: string, appID: string, routing?: 'host' | 'path'): string {
+function appAccessURL(base: string, appID: string, routing?: 'host' | 'path', username?: string, appName?: string): string {
   const url = new URL(base)
   if (routing === 'path') {
-    url.pathname = `/${appID}/`
+    const segment = /^[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/
+    url.pathname = username && appName && segment.test(username) && segment.test(appName)
+      ? `/${username}/${appName}/` : `/${appID}/`
   } else {
     url.hostname = `${appID}.${url.hostname}`
     url.pathname = '/'
@@ -218,7 +220,7 @@ function Overview() {
       {me.data.imageDeploymentAvailable && item.status === 'Running' &&
         <Button type="link" size="small" onClick={() => { setRollbackRevisionId(undefined); setRollbackAppId(item.id) }}>Restore version</Button>}
       {me.data.appAccessBaseURL && item.status === 'Running' &&
-        <Button type="link" size="small" href={appAccessURL(me.data.appAccessBaseURL, item.id, me.data.appAccessRouting)} target="_blank" rel="noopener noreferrer">Open app</Button>}
+        <Button type="link" size="small" href={appAccessURL(me.data.appAccessBaseURL, item.id, me.data.appAccessRouting, me.data.username, item.spec.name)} target="_blank" rel="noopener noreferrer">Open app</Button>}
       {item.status === 'Running' &&
         <Button type="link" size="small" onClick={() => { resourceForm.setFieldsValue({ resources: item.spec.resources, strategy: item.spec.persistent ? 'Recreate' : 'Rolling' }); setEditingApp(item) }}>Change resources</Button>}
       {item.status === 'Running' &&

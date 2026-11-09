@@ -22,7 +22,7 @@
 | `/activity`、`/help` | Activity、Help | 操作记录与英文使用提示 |
 | `/admin/accounts`、`/admin/cluster` | 管理员页面 | 账号和资源管理；仅管理员在导航中看到 |
 
-应用访问地址依据应用的稳定 ID 生成，不直接由应用名称推导。前端从 `/api/v1/me` 的 `appAccessBaseURL` 与 `appAccessRouting` 获取访问地址信息：`path` 模式为 `https://apps.polylink.org/<app-id>/`，省略或 `host` 模式保留旧 `<app-id>.apps.<worker>.sslip.io:30444/`。前端只负责生成链接，路径剥离、重定向与 Cookie 改写由 App Gateway 完成。学生作品应使用相对资源与 API 路径，或显式配置 `/<app-id>/` 基路径；绝对根路径资源不会自动修正。同一公开域名下的作品共享浏览器 origin，路径模式仅用于路由，不提供浏览器存储隔离。应用部署前要先等镜像状态变为 `Approved`；试点扫描策略允许 High，Critical/Unknown 仍阻止部署。
+前端从 `/api/v1/me` 的 `username`、`appAccessBaseURL`、`appAccessRouting` 和应用的 `spec.name` 生成访问地址：`path` 模式首选 `https://apps.polylink.org/<username>/<app-name>/`；字段缺失或不符合 URL 段规则时回退到稳定的 `/<app-id>/`。旧 ID 路由仍可用，省略 `appAccessRouting` 或 `host` 模式保留旧 `<app-id>.apps.<worker>.sslip.io:30444/`。前端只负责生成链接，路径剥离、重定向与 Cookie 改写由 App Gateway 完成。学生作品应使用相对资源与 API 路径，或根据 `X-Forwarded-Prefix` 配置基路径；绝对根路径资源不会自动修正。同一公开域名下的作品共享浏览器 origin，路径模式仅用于路由，不提供浏览器存储隔离。应用部署前要先等镜像状态变为 `Approved`；试点扫描策略允许 High，Critical/Unknown 仍阻止部署。
 
 ## 数据、认证与错误处理
 

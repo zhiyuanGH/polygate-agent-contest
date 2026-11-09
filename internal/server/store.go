@@ -34,6 +34,7 @@ type Principal struct {
 
 type Account struct {
 	ID                 string
+	Username           string
 	DisplayName        string
 	Role               string
 	Quota              domain.Quota

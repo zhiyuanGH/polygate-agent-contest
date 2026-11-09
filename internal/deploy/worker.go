@@ -20,6 +20,7 @@ type Task struct {
 	Strategy      string
 	DesiredState  string
 	AccountID     string
+	Username      string
 	AppID         string
 	RevisionID    string
 	Spec          domain.AppSpec

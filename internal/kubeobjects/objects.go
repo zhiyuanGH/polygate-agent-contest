@@ -23,6 +23,7 @@ func (l List) JSON() ([]byte, error) { return json.MarshalIndent(l, "", "  ") }
 
 var accountPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 var digestPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._:/-]+@sha256:[0-9a-f]{64}$`)
+var routeAliasSegmentPattern = regexp.MustCompile(`^[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$`)
 
 func ValidatePlatformDigest(image string) error {
 	if !digestPattern.MatchString(image) {
@@ -216,21 +217,21 @@ func PrecreatedTenants(accountIDs []string, quota domain.Quota) (List, error) {
 
 // TrustedWorkload ignores spec.Image. The platform must supply a digest from
 // its own approved image catalog; mutable tags are never accepted here.
-func TrustedWorkload(accountID, appID string, spec domain.AppSpec, platformImageDigest string) (List, error) {
-	return workload(accountID, appID, spec, platformImageDigest, false)
+func TrustedWorkload(accountID, appID string, spec domain.AppSpec, platformImageDigest string, username ...string) (List, error) {
+	return workload(accountID, appID, spec, platformImageDigest, false, username...)
 }
 
 // RollingWorkload uses one surge Pod and keeps every existing replica available
 // while replacing a stateless Deployment. The caller must reserve that extra
 // Pod's resources before applying this template.
-func RollingWorkload(accountID, appID string, spec domain.AppSpec, platformImageDigest string) (List, error) {
+func RollingWorkload(accountID, appID string, spec domain.AppSpec, platformImageDigest string, username ...string) (List, error) {
 	if spec.Persistent {
 		return List{}, errors.New("persistent workloads require Recreate updates")
 	}
-	return workload(accountID, appID, spec, platformImageDigest, true)
+	return workload(accountID, appID, spec, platformImageDigest, true, username...)
 }
 
-func workload(accountID, appID string, spec domain.AppSpec, platformImageDigest string, rolling bool) (List, error) {
+func workload(accountID, appID string, spec domain.AppSpec, platformImageDigest string, rolling bool, username ...string) (List, error) {
 	ns, err := NamespaceName(accountID)
 	if err != nil {
 		return List{}, err
@@ -247,6 +248,12 @@ func workload(accountID, appID string, spec domain.AppSpec, platformImageDigest 
 	}
 	labels := Object{"app.kubernetes.io/managed-by": "polygate", "polygate.io/account-id": accountID, "polygate.io/app-id": appID}
 	meta := Object{"name": name, "namespace": ns, "labels": labels}
+	serviceMeta := Object{"name": name, "namespace": ns, "labels": labels}
+	if len(username) > 0 && routeAliasSegmentPattern.MatchString(username[0]) &&
+		routeAliasSegmentPattern.MatchString(spec.Name) {
+		serviceMeta["annotations"] = Object{"polygate.io/route-username": username[0],
+			"polygate.io/route-app-name": spec.Name}
+	}
 	resources := Object{"requests": Object{"cpu": fmt.Sprintf("%dm", spec.Resources.CPURequestMilli), "memory": fmt.Sprintf("%dMi", spec.Resources.MemoryMiB), "ephemeral-storage": "128Mi"},
 		"limits": Object{"cpu": fmt.Sprintf("%dm", spec.Resources.CPULimitMilli), "memory": fmt.Sprintf("%dMi", spec.Resources.MemoryMiB), "ephemeral-storage": "1Gi"}}
 	container := Object{"name": "app", "image": platformImageDigest, "imagePullPolicy": "IfNotPresent",
@@ -298,7 +305,7 @@ func workload(accountID, appID string, spec domain.AppSpec, platformImageDigest 
 		{"apiVersion": "apps/v1", "kind": "Deployment", "metadata": meta,
 			"spec": Object{"replicas": spec.Resources.Replicas, "strategy": strategy,
 				"selector": Object{"matchLabels": labels}, "template": Object{"metadata": Object{"labels": labels}, "spec": pod}}},
-		{"apiVersion": "v1", "kind": "Service", "metadata": meta,
+		{"apiVersion": "v1", "kind": "Service", "metadata": serviceMeta,
 			"spec": Object{"type": "ClusterIP", "selector": labels, "ports": []Object{{"name": "http", "port": spec.Port, "targetPort": "http", "protocol": "TCP"}}}},
 	}}, nil
 }

@@ -34,11 +34,11 @@ func (s *Store) Close() { s.Pool.Close() }
 func (s *Store) Account(ctx context.Context, id string) (server.Account, error) {
 	var a server.Account
 	var enabled bool
-	err := s.Pool.QueryRow(ctx, `SELECT id::text, display_name, role, enabled, image_deploy_enabled,
+	err := s.Pool.QueryRow(ctx, `SELECT id::text, username, display_name, role, enabled, image_deploy_enabled,
 		source_build_enabled,volume_enabled,
         quota_cpu_request_milli, quota_cpu_limit_milli, quota_memory_mib,
         quota_pods, quota_apps FROM accounts WHERE id=$1`, id).Scan(
-		&a.ID, &a.DisplayName, &a.Role, &enabled, &a.ImageDeployEnabled, &a.SourceBuildEnabled, &a.VolumeEnabled,
+		&a.ID, &a.Username, &a.DisplayName, &a.Role, &enabled, &a.ImageDeployEnabled, &a.SourceBuildEnabled, &a.VolumeEnabled,
 		&a.Quota.CPURequestMilli, &a.Quota.CPULimitMilli,
 		&a.Quota.MemoryMiB, &a.Quota.Pods, &a.Quota.Apps)
 	if err != nil {

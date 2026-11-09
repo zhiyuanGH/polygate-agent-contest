@@ -227,9 +227,9 @@ func (k *KubernetesCluster) EnsureWorkload(ctx context.Context, task Task) error
 	var objects kubeobjects.List
 	var err error
 	if (task.Kind == "Update" || task.Kind == "Rollback") && !task.Spec.Persistent && task.Strategy != "Recreate" {
-		objects, err = kubeobjects.RollingWorkload(task.AccountID, task.AppID, task.Spec, task.ImageDigest)
+		objects, err = kubeobjects.RollingWorkload(task.AccountID, task.AppID, task.Spec, task.ImageDigest, task.Username)
 	} else {
-		objects, err = kubeobjects.TrustedWorkload(task.AccountID, task.AppID, task.Spec, task.ImageDigest)
+		objects, err = kubeobjects.TrustedWorkload(task.AccountID, task.AppID, task.Spec, task.ImageDigest, task.Username)
 	}
 	if err != nil {
 		return err

@@ -55,7 +55,7 @@ pre{background:#f7f2f3;padding:14px;overflow:auto}pre code{background:none;paddi
 <p>第一次测试可保持默认资源：<strong>CPU request</strong> 为 <code>250 m</code>，<strong>CPU limit</strong> 为 <code>1000 m</code>，<strong>Memory</strong> 为 <code>1024 MiB</code>，<strong>Replicas</strong> 为 <code>1</code>，<strong>Use persistent storage</strong> 关闭。在中间工作区向下滚动，点击一次 <strong>Create and deploy</strong>。平台会建立草稿并排队部署。单容器内存最多可选 4096 MiB（4 GiB），但账号和集群总额度仍会限制能否部署。</p>
 <p><img alt="资源设置及 Create and deploy 按钮" src="/guide-16b-create-app-resources.png" /></p>
 <h3>第 8 步：等待 Running，打开作品</h3>
-<p>页面回到 <strong>Overview</strong> 后，在中间工作区向下滚动到 <strong>Applications</strong>。新应用状态会逐步变化，最终应显示 <strong>Running</strong>。在同一行点击 <strong>Open app</strong>。公网作品地址为 <code>https://apps.polylink.org/&lt;app-id&gt;/</code>，其中 app ID 是固定标识，不是显示名称。示例页面打开后点击 <strong>Ask agent</strong>，下方会出现本地生成的模拟回复；不会调用云端模型，也不会产生模型 token 费用。</p>
+<p>页面回到 <strong>Overview</strong> 后，在中间工作区向下滚动到 <strong>Applications</strong>。新应用状态会逐步变化，最终应显示 <strong>Running</strong>。在同一行点击 <strong>Open app</strong>。公网作品地址为 <code>https://apps.polylink.org/&lt;username&gt;/&lt;app-name&gt;/</code>；原来的 <code>/&lt;app-id&gt;/</code> 地址也继续可用。示例页面打开后点击 <strong>Ask agent</strong>，下方会出现本地生成的模拟回复；不会调用云端模型，也不会产生模型 token 费用。</p>
 <p><img alt="Running 状态及该应用操作按钮" src="/guide-17-app-running.png" /></p>
 <p><img alt="Mock Agent 作品页面与模拟回复" src="/guide-18-open-app.png" /></p>
 <h3>第 9 步：查看日志和资源用量</h3>

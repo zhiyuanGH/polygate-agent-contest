@@ -42,6 +42,46 @@ func service() *corev1.Service {
 	}
 }
 
+func TestReadableAliasUsesManagedServiceAndKeepsIDRoute(t *testing.T) {
+	managed := service()
+	managed.Annotations = map[string]string{
+		"polygate.io/route-username": "student-a", "polygate.io/route-app-name": "test-agent-1"}
+	paths, err := ParsePathRoutes("apps.polylink.org:443")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gotPath, gotPrefix string
+	gateway := &Gateway{Resolver: NewResolver(fake.NewSimpleClientset(managed)), PathRoutes: paths,
+		Transport: transportFunc(func(req *http.Request) (*http.Response, error) {
+			gotPath, gotPrefix = req.URL.RequestURI(), req.Header.Get("X-Forwarded-Prefix")
+			return &http.Response{StatusCode: 200, Header: make(http.Header),
+				Body: io.NopCloser(strings.NewReader("ok"))}, nil
+		})}
+	for _, route := range []struct{ path, prefix string }{
+		{"/student-a/test-agent-1/docs", "/student-a/test-agent-1"},
+		{"/" + testApp + "/docs", "/" + testApp},
+	} {
+		response := httptest.NewRecorder()
+		gateway.ServeHTTP(response, httptest.NewRequest("GET", "https://apps.polylink.org"+route.path, nil))
+		if response.Code != 200 || gotPath != "/docs" || gotPrefix != route.prefix {
+			t.Fatalf("route %s failed: status=%d upstream=%s prefix=%s", route.path,
+				response.Code, gotPath, gotPrefix)
+		}
+	}
+	response := httptest.NewRecorder()
+	gateway.ServeHTTP(response, httptest.NewRequest("GET", "https://apps.polylink.org/student-a/test-agent-1", nil))
+	if response.Code != http.StatusPermanentRedirect || response.Header().Get("Location") != "/student-a/test-agent-1/" {
+		t.Fatalf("alias slash redirect failed: %d %s", response.Code, response.Header().Get("Location"))
+	}
+	for _, path := range []string{"/student-a/other/", "/other/test-agent-1/", "/student-a/%2Fdocs/"} {
+		response := httptest.NewRecorder()
+		gateway.ServeHTTP(response, httptest.NewRequest("GET", "https://apps.polylink.org"+path, nil))
+		if response.Code != http.StatusNotFound {
+			t.Fatalf("unmanaged alias %s accepted: %d", path, response.Code)
+		}
+	}
+}
+
 func TestHostAndServiceValidation(t *testing.T) {
 	good := testApp + "." + testSuffix + ":30444"
 	if id, err := AppIDFromHost(good, "30444", []string{testSuffix}); err != nil || id != testApp {

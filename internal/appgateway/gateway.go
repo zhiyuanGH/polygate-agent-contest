@@ -21,6 +21,7 @@ import (
 )
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+var aliasSegmentPattern = regexp.MustCompile(`^[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$`)
 
 var ErrNotFound = errors.New("app service not found")
 
@@ -38,8 +39,16 @@ func NewResolver(client kubernetes.Interface) *Resolver {
 
 // Resolve accepts only Services created by PolyGate with matching app and
 // account labels. No user-controlled hostname or URL is used as an upstream.
+func validRouteKey(key string) bool {
+	if uuidPattern.MatchString(key) {
+		return true
+	}
+	username, name, ok := strings.Cut(key, "/")
+	return ok && aliasSegmentPattern.MatchString(username) && aliasSegmentPattern.MatchString(name)
+}
+
 func (r *Resolver) Resolve(ctx context.Context, appID string) (*url.URL, error) {
-	if !uuidPattern.MatchString(appID) {
+	if !validRouteKey(appID) {
 		return nil, ErrNotFound
 	}
 	r.mu.Lock()
@@ -67,6 +76,12 @@ func (r *Resolver) Resolve(ctx context.Context, appID string) (*url.URL, error) 
 				conflicts[id] = true
 			}
 			services[id] = target
+			if alias := serviceAlias(service); alias != "" {
+				if services[alias] != nil {
+					conflicts[alias] = true
+				}
+				services[alias] = target
+			}
 		}
 		for id := range conflicts {
 			delete(services, id)
@@ -100,6 +115,15 @@ func targetFor(service *corev1.Service) (string, *url.URL, bool) {
 		strconv.Itoa(int(service.Spec.Ports[0].Port))),
 	}
 	return appID, target, true
+}
+
+func serviceAlias(service *corev1.Service) string {
+	annotations := service.GetAnnotations()
+	username, name := annotations["polygate.io/route-username"], annotations["polygate.io/route-app-name"]
+	if !aliasSegmentPattern.MatchString(username) || !aliasSegmentPattern.MatchString(name) {
+		return ""
+	}
+	return username + "/" + name
 }
 
 func AppIDFromHost(host, port string, suffixes []string) (string, error) {
@@ -275,15 +299,22 @@ func pathAppID(req *http.Request, routes []PathRoute) (string, string, bool, boo
 		if !strings.HasPrefix(escaped, "/") {
 			return "", "", true, false
 		}
-		segment, _, _ := strings.Cut(escaped[1:], "/")
+		segment, rest, hasSlash := strings.Cut(escaped[1:], "/")
+		key, prefix := segment, "/"+segment
 		if !uuidPattern.MatchString(segment) {
-			return "", "", true, false
+			if !aliasSegmentPattern.MatchString(segment) || !hasSlash {
+				return "", "", true, false
+			}
+			name, _, _ := strings.Cut(rest, "/")
+			if !aliasSegmentPattern.MatchString(name) {
+				return "", "", true, false
+			}
+			key, prefix = segment+"/"+name, "/"+segment+"/"+name
 		}
-		prefix := "/" + segment
 		if escaped == prefix {
-			return segment, prefix, true, true
+			return key, prefix, true, true
 		}
-		return segment, prefix, true, false
+		return key, prefix, true, false
 	}
 	return "", "", false, false
 }
@@ -429,6 +460,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			pr.Out.Header.Del("X-Forwarded-For")
 			pr.Out.Header.Del("X-Forwarded-Host")
 			pr.Out.Header.Del("X-Forwarded-Proto")
+			pr.Out.Header.Del("X-Forwarded-Prefix")
 			pr.SetXForwarded()
 			if pathMode {
 				pr.Out.Header.Set("X-Forwarded-Prefix", prefix)

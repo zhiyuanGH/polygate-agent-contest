@@ -97,6 +97,7 @@ export type ClusterResources = { nodes: ClusterNode[]; sampledAt: string }
 
 export type Me = {
   id: string
+  username?: string
   displayName: string
   role: 'student' | 'admin'
   mode: 'loopback-development' | 'authenticated'

@@ -72,7 +72,7 @@
 
 ### 第 8 步：等待 Running，打开作品
 
-页面回到 **Overview** 后，在中间工作区向下滚动到 **Applications**。新应用状态会逐步变化，最终应显示 **Running**。在同一行点击 **Open app**。公网作品地址为 `https://apps.polylink.org/<app-id>/`，其中 app ID 是固定标识，不是显示名称。示例页面打开后点击 **Ask agent**，下方会出现本地生成的模拟回复；不会调用云端模型，也不会产生模型 token 费用。
+页面回到 **Overview** 后，在中间工作区向下滚动到 **Applications**。新应用状态会逐步变化，最终应显示 **Running**。在同一行点击 **Open app**。公网作品地址为 `https://apps.polylink.org/<username>/<app-name>/`；原来的 `/<app-id>/` 地址也继续可用。示例页面打开后点击 **Ask agent**，下方会出现本地生成的模拟回复；不会调用云端模型，也不会产生模型 token 费用。
 
 ![Running 状态及该应用操作按钮](../web/public/guide-17-app-running.png)
 

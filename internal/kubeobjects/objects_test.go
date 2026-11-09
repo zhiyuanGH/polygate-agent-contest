@@ -180,6 +180,25 @@ func TestTrustedWorkloadUsesPlatformDigestAndRestrictedPod(t *testing.T) {
 	}
 }
 
+func TestWorkloadPublishesReadableRouteAliasOnService(t *testing.T) {
+	spec := domain.AppSpec{Name: "test-agent-1", Image: "ignored.example/app:v1", Port: 8080,
+		Resources: domain.Resources{CPURequestMilli: 250, CPULimitMilli: 1000, MemoryMiB: 1024, Replicas: 1}}
+	digest := "registry.example/approved/agent@sha256:" + strings.Repeat("a", 64)
+	list, err := TrustedWorkload(accountA, appID, spec, digest, "student-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := list.Items[1]["metadata"].(Object)
+	annotations := service["annotations"].(Object)
+	if annotations["polygate.io/route-username"] != "student-a" ||
+		annotations["polygate.io/route-app-name"] != "test-agent-1" {
+		t.Fatalf("readable route metadata differs: %+v", annotations)
+	}
+	if _, present := list.Items[0]["metadata"].(Object)["annotations"]; present {
+		t.Fatal("route alias must not mutate deployment metadata")
+	}
+}
+
 func TestRollingWorkloadRequiresStatelessAppAndSurge(t *testing.T) {
 	spec := domain.AppSpec{Name: "agent", Image: "ignored.example/agent:v1", Port: 8080,
 		Resources: domain.Resources{CPURequestMilli: 250, CPULimitMilli: 1000, MemoryMiB: 1024, Replicas: 1}}

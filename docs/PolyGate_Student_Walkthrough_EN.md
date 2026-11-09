@@ -72,7 +72,7 @@ For a first test, leave **CPU request** at `250 m`, **CPU limit** at `1000 m`, *
 
 ### Step 8 — Wait for Running and open the app
 
-PolyGate returns to **Overview**. Scroll the main workspace to **Applications**. The new row moves through deployment states and should reach **Running**. Select **Open app** in that row. Its public URL is `https://apps.polylink.org/<app-id>/`; the app ID is the stable identifier, not the display name. On the sample page, select **Ask agent**; a local mock reply appears. This example uses no cloud model API and consumes no model tokens.
+PolyGate returns to **Overview**. Scroll the main workspace to **Applications**. The new row moves through deployment states and should reach **Running**. Select **Open app** in that row. Its public URL is `https://apps.polylink.org/<username>/<app-name>/`; the older `/<app-id>/` address also works. On the sample page, select **Ask agent**; a local mock reply appears. This example uses no cloud model API and consumes no model tokens.
 
 ![Running app and its actions](../web/public/guide-17-app-running.png)
 

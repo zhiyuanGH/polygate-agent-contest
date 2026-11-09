@@ -26,7 +26,7 @@ func (s *Store) ClaimNext(ctx context.Context, workerID string, lease time.Durat
 	defer tx.Rollback(ctx)
 	var specJSON []byte
 	err = tx.QueryRow(ctx, `SELECT t.id::text,t.task_kind,t.update_kind,t.rollout_strategy,t.desired_state,t.account_id::text,t.app_id::text,t.revision_id::text,
-	        r.spec,r.platform_image_digest,t.attempt,COALESCE(v.size_gib,0),
+	        r.spec,r.platform_image_digest,t.attempt,COALESCE(v.size_gib,0),a.username,
         a.quota_cpu_request_milli,a.quota_cpu_limit_milli,a.quota_memory_mib,a.quota_pods,a.quota_apps
         FROM deployment_tasks t
         JOIN app_revisions r ON r.id=t.revision_id
@@ -37,7 +37,7 @@ func (s *Store) ClaimNext(ctx context.Context, workerID string, lease time.Durat
           AND (t.lease_until IS NULL OR t.lease_until<=now())
         ORDER BY t.created_at,t.id LIMIT 1 FOR UPDATE OF t SKIP LOCKED`).Scan(
 		&task.ID, &task.Kind, &task.UpdateKind, &task.Strategy, &task.DesiredState, &task.AccountID, &task.AppID, &task.RevisionID,
-		&specJSON, &task.ImageDigest, &task.Attempt, &task.VolumeSizeGiB,
+		&specJSON, &task.ImageDigest, &task.Attempt, &task.VolumeSizeGiB, &task.Username,
 		&task.Quota.CPURequestMilli, &task.Quota.CPULimitMilli,
 		&task.Quota.MemoryMiB, &task.Quota.Pods, &task.Quota.Apps)
 	if errors.Is(err, pgx.ErrNoRows) {

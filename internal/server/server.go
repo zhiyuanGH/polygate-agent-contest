@@ -385,7 +385,7 @@ func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
 		message = "Approved image deployment is available for this account."
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"id": account.ID, "displayName": account.DisplayName, "role": account.Role,
+		"id": account.ID, "username": account.Username, "displayName": account.DisplayName, "role": account.Role,
 		"quota": account.Quota, "configured": usage, "mode": h.mode,
 		"trustedDeploymentAvailable": deployAvailable,
 		"imageDeploymentAvailable":   imageAvailable,
