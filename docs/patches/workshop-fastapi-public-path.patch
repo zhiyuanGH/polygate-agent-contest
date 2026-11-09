@@ -1,0 +1,67 @@
+diff --git a/Dockerfile b/Dockerfile
+index 978111d..4753d6f 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -1,10 +1,12 @@
+-FROM python:3.12-slim
++FROM python:3.12-alpine
+ WORKDIR /app
+ COPY requirements.txt constraints.txt ./
+ RUN python -m pip install --no-cache-dir -r requirements.txt
+ COPY booking_demo ./booking_demo
+ COPY data/mock_data.json ./data/mock_data.json
+-RUN useradd --create-home sample && chown -R sample:sample /app
++RUN adduser -D sample && chown -R sample:sample /app && chmod -R a+rX /app
++
++ENV POLYGATE_DB_FILE=/tmp/bookings.sqlite3 PYTHONDONTWRITEBYTECODE=1
+ USER sample
+ EXPOSE 8000
+ CMD ["python", "-m", "booking_demo", "--host", "0.0.0.0", "--port", "8000"]
+diff --git a/booking_demo/app.py b/booking_demo/app.py
+index d0c17c9..f9d7400 100644
+--- a/booking_demo/app.py
++++ b/booking_demo/app.py
+@@ -4,9 +4,10 @@ from contextlib import asynccontextmanager
+ from pathlib import Path
+ from typing import Annotated
+ import os
++import re
+ 
+ from fastapi import FastAPI, Path as PathParameter, Query, Request
+-from fastapi.responses import JSONResponse
++from fastapi.responses import JSONResponse, RedirectResponse
+ 
+ from .models import Availability, BookingCreated, BookingRequest, Bookings, Court, TimeWindow, UserQuery
+ from .store import BookingConflict, DEFAULT_SEED, ROOT, Store, UnknownCourt
+@@ -36,8 +37,31 @@ def create_app(db_path: Path | None = None, seed_path: Path | None = None) -> Fa
+         ),
+         lifespan=lifespan,
+     )
++
++    # PolyGate strips /<app-id> before proxying. FastAPI uses ASGI root_path
++    # to generate Swagger/OpenAPI links with the public prefix. The gateway
++    # supplies this header only for path routes, so legacy host routes still
++    # generate root URLs.
++    public_prefix = re.compile(
++        r"^/(?:[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|"
++        r"[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?/[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?)$"
++    )
++
++    @application.middleware("http")
++    async def polygate_path_prefix(request: Request, call_next):
++        prefix = request.headers.get("x-forwarded-prefix", "")
++        if public_prefix.fullmatch(prefix):
++            request.scope["root_path"] = prefix
++        return await call_next(request)
++
+     application.state.store = store
+ 
++    @application.get("/", include_in_schema=False)
++    def open_documentation():
++        # A relative redirect works through both the path gateway and the
++        # legacy host gateway, so PolyGate's Open app link has a landing page.
++        return RedirectResponse("docs")
++
+     @application.exception_handler(UnknownCourt)
+     async def unknown_court(_request: Request, error: UnknownCourt):
+         return JSONResponse(status_code=404, content={"detail": f"Court {error.args[0]} does not exist."})
