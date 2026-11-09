@@ -16,8 +16,8 @@ export default function HelpPage() {
     </Card>
     <Card className="form-card" title="Deploy a container image" style={{ marginBottom: 20 }}>
       <ol>
-        <li>Open <Link to="/images">My images</Link>, enter a public image reference and select <Text strong>Inspect image</Text>.</li>
-        <li>Wait until the image is <Text strong>Approved</Text>. A rejected or failed image cannot be deployed.</li>
+        <li>Open <Link to="/images">My images</Link>. Inspect a public image reference or upload a local <Text code>docker save</Text> tar containing one <Text code>linux/amd64</Text> image (up to 1 GiB).</li>
+        <li>Wait until the image is <Text strong>Approved</Text>. For a rejected scan, use <Text strong>View report</Text> or <Text strong>Download JSON</Text> to see Trivy findings.</li>
         <li>Open <Link to="/apps/new">New app</Link>. Enter an app name, the port your container listens on, and its resources. Select <Text strong>Create draft</Text>.</li>
         <li>On <Link to="/">Overview</Link>, select <Text strong>Deploy image</Text> and choose your approved image. When the app is <Text strong>Running</Text>, select <Text strong>Open app</Text>.</li>
       </ol>
@@ -40,7 +40,7 @@ export default function HelpPage() {
       <Paragraph type="secondary">These projects use mock responses and do not call a cloud model API.</Paragraph>
     </Card>
     <Card className="form-card" title="Running and troubleshooting">
-      <Paragraph>Your application must listen on <Text code>0.0.0.0</Text> at the port entered in New app. Set an HTTP health path only if that path returns a successful response while the app is healthy.</Paragraph>
+      <Paragraph><Text strong>App port</Text> is the port where the HTTP server listens inside your container, not a browser URL or host port. Enter the actual number and bind the process to <Text code>0.0.0.0</Text>; <Text code>127.0.0.1</Text> is not reachable from PolyGate. A Dockerfile <Text code>EXPOSE</Text> line alone does not verify the listening port. Set an HTTP health path only if that path returns HTTP 2xx or 3xx while the app is healthy.</Paragraph>
       <Paragraph>If a build succeeds but its app shows <Text strong>Failed</Text> and Events report <Text code>connection refused</Text>, compare the app port with the program's listening port. On <Link to="/">Overview</Link>, select <Text strong>Edit port</Text>, save the correct port, then select <Text strong>Deploy image</Text> with the same approved image. The Python template exposes port <Text code>8000</Text>.</Paragraph>
       <Paragraph>The maximum memory setting is <Text strong>4096 MiB (4 GiB)</Text> per container. A deployment may be refused when your account or the shared cluster is full.</Paragraph>
       <Paragraph>Use <Text strong>Logs</Text> on Overview to inspect output, events and resource usage. <Text strong>Stop</Text> removes the running workload and releases its reserved resources; <Text strong>Delete</Text> removes a stopped app.</Paragraph>

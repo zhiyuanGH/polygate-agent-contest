@@ -50,6 +50,7 @@ pre{background:#f7f2f3;padding:14px;overflow:auto}pre code{background:none;paddi
 <p><img alt="构建成功并出现 Create and deploy app" src="/guide-14-build-approved.png" /></p>
 <h3>第 7 步：填写应用信息并部署</h3>
 <p>点击成功构建那一行的 <strong>Create and deploy app</strong>。新页面顶部应显示 <strong>Approved build selected</strong>。填写一个未使用过、由小写字母和数字等组成的 <strong>App name</strong>，例如 <code>my-mock-agent</code>。镜像引用由平台自动填入，不用修改。<strong>App port</strong> 填 <code>8000</code>，<strong>HTTP health path</strong> 填 <code>/health</code>。</p>
+<p><strong>App port 是容器内 HTTP 程序实际监听的端口。</strong> 这个 Python 示例监听 <code>8000</code>，所以只填数字 <code>8000</code>；不要填 URL、浏览器的 HTTPS 端口或宿主机端口。程序必须监听该端口的 <code>0.0.0.0</code>，只监听 <code>127.0.0.1</code> 时平台无法访问。示例提供 <code>/health</code>，所以可以填写；自己的项目若没有在健康时返回 HTTP 2xx 或 3xx 的接口，就把 <strong>HTTP health path</strong> 留空。</p>
 <p><img alt="应用名称、镜像、端口和健康检查路径" src="/guide-16-create-app-form.png" /></p>
 <p>第一次测试可保持默认资源：<strong>CPU request</strong> 为 <code>250 m</code>，<strong>CPU limit</strong> 为 <code>1000 m</code>，<strong>Memory</strong> 为 <code>1024 MiB</code>，<strong>Replicas</strong> 为 <code>1</code>，<strong>Use persistent storage</strong> 关闭。在中间工作区向下滚动，点击一次 <strong>Create and deploy</strong>。平台会建立草稿并排队部署。单容器内存最多可选 4096 MiB（4 GiB），但账号和集群总额度仍会限制能否部署。</p>
 <p><img alt="资源设置及 Create and deploy 按钮" src="/guide-16b-create-app-resources.png" /></p>
@@ -101,8 +102,8 @@ pre{background:#f7f2f3;padding:14px;overflow:auto}pre code{background:none;paddi
 </tr>
 </tbody>
 </table>
-<p>提交自己的源码时：Python 模板的 <code>main.py</code>、Node.js 模板的 <code>package.json</code> 和 <code>package-lock.json</code>、或自定义方式的 <code>Dockerfile</code> 必须在 ZIP 根目录。程序应监听 <code>0.0.0.0</code> 和表单里填的端口。只有应用健康时真正返回 HTTP 2xx 或 3xx，才填写 HTTP 健康检查路径。</p>
-<p>如果已有<strong>预构建镜像</strong>：进入 <strong>My images</strong>，填写公开镜像引用并点击 <strong>Inspect image</strong>，等到 <strong>Approved</strong>；进入 <strong>New app</strong>，按真实端口和资源创建草稿；然后到 <strong>Overview</strong> 点 <strong>Deploy image</strong>，选择刚批准的镜像。若需要持久化文件，先到 <strong>Volumes</strong> 申请卷并等到 <strong>Ready</strong>，再在应用表单启用 <strong>Use persistent storage</strong>，选择未占用的卷。一个卷同一时间只能用于一个应用、一个运行副本。试点卷目前只有一个在线副本，重要文件请另外保留备份。</p>
+<p>提交自己的源码时：Python 模板的 <code>main.py</code>、Node.js 模板的 <code>package.json</code> 和 <code>package-lock.json</code>、或自定义方式的 <code>Dockerfile</code> 必须在 ZIP 根目录。先看程序启动命令或日志，确认实际监听端口，再把同一个数字填进 <strong>App port</strong>。Dockerfile 的 <code>EXPOSE</code> 只是声明，不能证明程序确实监听该端口。程序应监听 <code>0.0.0.0</code> 和表单里填的端口。只有应用健康时真正返回 HTTP 2xx 或 3xx，才填写 HTTP 健康检查路径。</p>
+<p>如果已有<strong>预构建镜像</strong>：进入 <strong>My images</strong>，可以填写公开镜像引用并点击 <strong>Inspect image</strong>，也可以点击 <strong>Upload image</strong> 上传本机 <code>docker save</code> 生成的 <code>.tar</code>。归档最多 1 GiB，须包含一张 <code>linux/amd64</code> 镜像。等到 <strong>Approved</strong>；若显示 <strong>Rejected</strong>，可用 <strong>View report</strong> 查看或 <strong>Download JSON</strong> 下载 Trivy 报告。然后进入 <strong>New app</strong>，按镜像内程序的真实监听端口和资源创建草稿；到 <strong>Overview</strong> 点 <strong>Deploy image</strong>，选择刚批准的镜像。若需要持久化文件，先到 <strong>Volumes</strong> 申请卷并等到 <strong>Ready</strong>，再在应用表单启用 <strong>Use persistent storage</strong>，选择未占用的卷。一个卷同一时间只能用于一个应用、一个运行副本。试点卷目前只有一个在线副本，重要文件请另外保留备份。</p>
 <p><img alt="My images 页面" src="/guide-03-my-images.png" /></p>
 <p><img alt="Volumes 页面" src="/guide-06-volumes.png" /></p>
 <p>若任一步失败，记下应用名、提交时间和页面错误，到 <strong>Build history → View log</strong> 或 <strong>Overview → Logs</strong> 查看，再把这些信息交给实验室管理员。不要把密码或 API Key 放进截图、源码或日志。</p>

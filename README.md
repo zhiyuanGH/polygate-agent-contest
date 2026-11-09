@@ -20,4 +20,4 @@ The application packages are in `cmd/` and `internal/`; PostgreSQL migrations ar
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Never commit passwords, tokens, private keys, kubeconfigs, account exports, or production snapshots. No public license has been selected yet; please ask the maintainers before reusing this code outside the project.
+Start with [DEVELOPMENT.md](DEVELOPMENT.md), then see [CONTRIBUTING.md](CONTRIBUTING.md). Never commit passwords, tokens, private keys, kubeconfigs, account exports, or production snapshots. No public license has been selected yet; please ask the maintainers before reusing this code outside the project.
