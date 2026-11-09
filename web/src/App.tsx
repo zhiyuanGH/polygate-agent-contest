@@ -136,9 +136,16 @@ function Overview() {
   const [runtimeForm] = Form.useForm<{ port: number; healthPath: string }>()
   const revisions = useQuery({ queryKey: ['revisions', rollbackAppId], queryFn: () => api.appRevisions(rollbackAppId!), enabled: rollbackAppId !== null })
   const [logsApp, setLogsApp] = useState<AppRecord | null>(null)
+  const [selectedLogPod, setSelectedLogPod] = useState('')
   const [historyHours, setHistoryHours] = useState<24 | 168>(24)
-  const appLogs = useQuery({ queryKey: ['appLogs', logsApp?.id], queryFn: () => api.appLogs(logsApp!.id),
-    enabled: logsApp !== null && logsApp.status !== 'Stopped', refetchInterval: logsApp !== null && logsApp.status !== 'Stopped' ? 5000 : false })
+  const appPods = useQuery({ queryKey: ['appPods', logsApp?.id], queryFn: () => api.appPods(logsApp!.id),
+    enabled: logsApp !== null && logsApp.status !== 'Stopped',
+    refetchInterval: logsApp !== null && logsApp.status !== 'Stopped' ? 5000 : false })
+  const activeLogPod = appPods.data?.some(pod => pod.name === selectedLogPod) ? selectedLogPod : undefined
+  const appLogs = useQuery({ queryKey: ['appLogs', logsApp?.id, activeLogPod],
+    queryFn: () => api.appLogs(logsApp!.id, activeLogPod),
+    enabled: logsApp !== null && logsApp.status !== 'Stopped' && (appPods.data?.length ?? 0) > 0,
+    refetchInterval: logsApp !== null && logsApp.status !== 'Stopped' ? 5000 : false })
   const appLogHistory = useQuery({ queryKey: ['appLogHistory', logsApp?.id, historyHours],
     queryFn: () => api.appLogHistory(logsApp!.id, historyHours),
     enabled: logsApp !== null && me.data?.appLogHistoryAvailable === true, refetchOnWindowFocus: false })
@@ -168,7 +175,7 @@ function Overview() {
     { title: 'Actions', key: 'actions', width: 300, render: (_: unknown, item: AppRecord) => <Space wrap size={[0, 0]}>
       {(me.data.appLogsAvailable && ['Queued', 'Deploying', 'Running', 'Failed'].includes(item.status) ||
         me.data.appLogHistoryAvailable && item.status === 'Stopped') &&
-        <Button type="link" size="small" onClick={() => setLogsApp(item)}>Logs</Button>}
+        <Button type="link" size="small" onClick={() => { setSelectedLogPod(''); setLogsApp(item) }}>Logs</Button>}
       {me.data.trustedDeploymentAvailable && (item.status === 'Draft' || item.status === 'Stopped' || item.status === 'Failed') &&
         <Button type="link" size="small" loading={deploying.isPending && deploying.variables === item.id} onClick={() => deploying.mutate(item.id)}>Deploy sample</Button>}
       {me.data.imageDeploymentAvailable && (item.status === 'Draft' || item.status === 'Stopped' || item.status === 'Failed') &&
@@ -240,7 +247,7 @@ function Overview() {
       </Form>
     </Modal>
     <Modal title={logsApp ? `Diagnostics: ${logsApp.spec.name}` : 'Application diagnostics'} open={logsApp !== null}
-      onCancel={() => setLogsApp(null)} footer={<Button onClick={() => { if (logsApp) { query.invalidateQueries({ queryKey: ['appLogs', logsApp.id] }); query.invalidateQueries({ queryKey: ['appLogHistory', logsApp.id] }); query.invalidateQueries({ queryKey: ['appEvents', logsApp.id] }); query.invalidateQueries({ queryKey: ['appMetrics', logsApp.id] }) } }}>Refresh</Button>} width={800}>
+      onCancel={() => setLogsApp(null)} footer={<Button onClick={() => { if (logsApp) { query.invalidateQueries({ queryKey: ['appPods', logsApp.id] }); query.invalidateQueries({ queryKey: ['appLogs', logsApp.id] }); query.invalidateQueries({ queryKey: ['appLogHistory', logsApp.id] }); query.invalidateQueries({ queryKey: ['appEvents', logsApp.id] }); query.invalidateQueries({ queryKey: ['appMetrics', logsApp.id] }) } }}>Refresh</Button>} width={800}>
       <Title level={5}>Current resource usage</Title>
       <Paragraph type="secondary">Recent CPU and memory samples for this app's running Pods. Updates every 15 seconds.</Paragraph>
       {appMetrics.error && <Alert type="warning" showIcon message="Resource usage unavailable" description={appMetrics.error.message} />}
@@ -252,6 +259,13 @@ function Overview() {
           { title: 'Sampled', dataIndex: 'timestamp', key: 'timestamp', render: (value: string) => value ? new Date(value).toLocaleString('en-GB') : 'Unavailable' }]} />}
       {logsApp?.status !== 'Stopped' && <><Title level={5}>Current container logs</Title>
         <Paragraph type="secondary">Latest 200 lines, up to 128 KiB. Refreshes every five seconds while open.</Paragraph>
+        {appPods.error && <Alert type="error" showIcon message="Could not list application Pods" description={appPods.error.message} />}
+        {appPods.isPending && <Spin />}
+        {appPods.data && appPods.data.length > 0 && <Select aria-label="Container Pod" value={activeLogPod ?? ''}
+          onChange={setSelectedLogPod} style={{ width: '100%', marginBottom: 12 }}
+          options={[{ value: '', label: 'Latest Pod' }, ...appPods.data.map(pod => ({ value: pod.name,
+            label: `${pod.name} · ${pod.ready ? 'Ready' : pod.phase || 'Not ready'} · ${pod.restarts} restarts` }))]} />}
+        {appPods.data?.length === 0 && <Paragraph type="secondary">No current Pod. Check historical logs and recent events below.</Paragraph>}
         {appLogs.error && <Alert type="error" showIcon message="Could not load application logs" description={appLogs.error.message} />}
         {appLogs.isPending && <Spin />}
         {appLogs.data && <><Text type="secondary">Pod: {appLogs.data.pod}</Text><pre style={{ maxHeight: 440, overflow: 'auto', padding: 12, background: '#111827', color: '#f9fafb', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{appLogs.data.data || 'No output yet.'}</pre></>}</>}

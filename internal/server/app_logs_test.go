@@ -24,6 +24,11 @@ func (r *fakeAppLogReader) Read(_ context.Context, _, _, pod string) (applogs.Re
 	return applogs.Result{Pod: "owned-pod", Data: "hello\n"}, nil
 }
 
+func (r *fakeAppLogReader) List(_ context.Context, _, _ string) ([]applogs.PodInfo, error) {
+	r.calls++
+	return []applogs.PodInfo{{Name: "owned-pod", Phase: "Running", Ready: true}}, nil
+}
+
 func (r *fakeAppLogReader) Events(_ context.Context, _, _ string) ([]applogs.Event, error) {
 	r.calls++
 	return []applogs.Event{{Reason: "Scheduled", Object: "owned-pod"}}, nil
@@ -120,6 +125,21 @@ func TestAppLogsRequireOwnedAppBeforeClusterRead(t *testing.T) {
 		status  int
 	}{{"student-b", 404}, {"student-a", 200}} {
 		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/apps/"+app.ID+"/pods", nil)
+		req.Header.Set("X-Test-Account", tc.account)
+		h.ServeHTTP(w, req)
+		if w.Code != tc.status {
+			t.Fatalf("pods as %s: %d", tc.account, w.Code)
+		}
+	}
+	if reader.calls != 3 {
+		t.Fatalf("foreign Pod list request reached cluster: %d calls", reader.calls)
+	}
+	for _, tc := range []struct {
+		account string
+		status  int
+	}{{"student-b", 404}, {"student-a", 200}} {
+		w := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/apps/"+app.ID+"/events", nil)
 		req.Header.Set("X-Test-Account", tc.account)
 		h.ServeHTTP(w, req)
@@ -127,7 +147,7 @@ func TestAppLogsRequireOwnedAppBeforeClusterRead(t *testing.T) {
 			t.Fatalf("events as %s: %d", tc.account, w.Code)
 		}
 	}
-	if reader.calls != 3 {
+	if reader.calls != 4 {
 		t.Fatalf("foreign event request reached cluster: %d calls", reader.calls)
 	}
 	for _, tc := range []struct {
@@ -142,16 +162,16 @@ func TestAppLogsRequireOwnedAppBeforeClusterRead(t *testing.T) {
 			t.Fatalf("metrics as %s: %d", tc.account, w.Code)
 		}
 	}
-	if reader.calls != 4 {
+	if reader.calls != 5 {
 		t.Fatalf("foreign metrics request reached cluster: %d calls", reader.calls)
 	}
-	if w := request("student-b", "/history"); w.Code != http.StatusNotFound || reader.calls != 4 {
+	if w := request("student-b", "/history"); w.Code != http.StatusNotFound || reader.calls != 5 {
 		t.Fatalf("foreign history leaked: status=%d readerCalls=%d", w.Code, reader.calls)
 	}
-	if w := request("student-a", "/history?hours=72"); w.Code != http.StatusBadRequest || reader.calls != 4 {
+	if w := request("student-a", "/history?hours=72"); w.Code != http.StatusBadRequest || reader.calls != 5 {
 		t.Fatalf("invalid history range accepted: status=%d readerCalls=%d", w.Code, reader.calls)
 	}
-	if w := request("student-a", "/history?hours=24"); w.Code != http.StatusOK || reader.calls != 5 {
+	if w := request("student-a", "/history?hours=24"); w.Code != http.StatusOK || reader.calls != 6 {
 		t.Fatalf("owned app history failed: status=%d readerCalls=%d", w.Code, reader.calls)
 	}
 }

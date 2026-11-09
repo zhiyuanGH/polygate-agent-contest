@@ -79,3 +79,36 @@ func TestReaderBoundsLogAndUsesOwnedNamespace(t *testing.T) {
 		t.Fatalf("bounded Pod log read failed: pod=%s bytes=%d err=%v", result.Pod, len(result.Data), err)
 	}
 }
+
+func TestListPodsIsOwnedAndIncludesUnreadyReplica(t *testing.T) {
+	const account = "c8114f16-58dc-4f71-918b-8d21c1d661a0"
+	const app = "a42cc824-7da4-47a6-90da-8d2c478e70c0"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Query().Get("labelSelector"), "polygate.io/app-id="+app) {
+			t.Errorf("app selector missing")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"apiVersion":"v1","kind":"PodList","metadata":{"resourceVersion":"1"},"items":[` +
+			`{"apiVersion":"v1","kind":"Pod","metadata":{"name":"ready","labels":{"app.kubernetes.io/managed-by":"polygate","polygate.io/account-id":"` + account + `","polygate.io/app-id":"` + app + `"}},"status":{"phase":"Running","containerStatuses":[{"ready":true,"restartCount":2}]}},` +
+			`{"apiVersion":"v1","kind":"Pod","metadata":{"name":"unready","labels":{"app.kubernetes.io/managed-by":"polygate","polygate.io/account-id":"` + account + `","polygate.io/app-id":"` + app + `"}},"status":{"phase":"Pending"}},` +
+			`{"apiVersion":"v1","kind":"Pod","metadata":{"name":"foreign","labels":{"app.kubernetes.io/managed-by":"polygate","polygate.io/account-id":"other","polygate.io/app-id":"` + app + `"}},"status":{"phase":"Running"}}]}`))
+	}))
+	defer server.Close()
+	client, err := dynamic.NewForConfig(&rest.Config{Host: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader := &Reader{client: client}
+	items, err := reader.List(t.Context(), account, app)
+	if err != nil || len(items) != 2 {
+		t.Fatalf("owned Pod list failed: items=%+v err=%v", items, err)
+	}
+	byName := map[string]PodInfo{}
+	for _, item := range items {
+		byName[item.Name] = item
+	}
+	if !byName["ready"].Ready || byName["ready"].Restarts != 2 ||
+		byName["unready"].Ready || byName["unready"].Phase != "Pending" {
+		t.Fatalf("Pod status differs: %+v", byName)
+	}
+}

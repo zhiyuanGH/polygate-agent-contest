@@ -31,6 +31,13 @@ type Result struct {
 	Data string `json:"data"`
 }
 
+type PodInfo struct {
+	Name     string `json:"name"`
+	Phase    string `json:"phase"`
+	Ready    bool   `json:"ready"`
+	Restarts int64  `json:"restarts"`
+}
+
 type Reader struct {
 	client   dynamic.Interface
 	http     *http.Client
@@ -58,29 +65,13 @@ func NewInCluster() (*Reader, error) {
 }
 
 func (r *Reader) Read(ctx context.Context, accountID, appID, requestedPod string) (Result, error) {
-	namespace, err := kubeobjects.NamespaceName(accountID)
+	pods, namespace, err := r.listOwnedPods(ctx, accountID, appID)
 	if err != nil {
 		return Result{}, err
 	}
-	if _, err := kubeobjects.AppName(appID); err != nil {
-		return Result{}, err
-	}
-	selector := labels.Set{
-		"app.kubernetes.io/managed-by": "polygate",
-		"polygate.io/account-id":       accountID,
-		"polygate.io/app-id":           appID,
-	}.AsSelector().String()
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
-	pods, err := r.client.Resource(schema.GroupVersionResource{Version: "v1", Resource: "pods"}).
-		Namespace(namespace).List(ctx, metav1.ListOptions{LabelSelector: selector, Limit: 20})
-	if err != nil {
-		return Result{}, err
-	}
-	if pods.GetContinue() != "" {
-		return Result{}, fmt.Errorf("too many app pods")
-	}
-	pod, err := selectPod(pods.Items, accountID, appID, requestedPod)
+	pod, err := selectPod(pods, accountID, appID, requestedPod)
 	if err != nil {
 		return Result{}, err
 	}
@@ -108,6 +99,63 @@ func (r *Reader) Read(ctx context.Context, accountID, appID, requestedPod string
 		data = data[:maxLogBytes]
 	}
 	return Result{Pod: pod.GetName(), Data: string(data)}, nil
+}
+
+func (r *Reader) List(ctx context.Context, accountID, appID string) ([]PodInfo, error) {
+	pods, _, err := r.listOwnedPods(ctx, accountID, appID)
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(pods, func(i, j int) bool {
+		return pods[i].GetCreationTimestamp().After(pods[j].GetCreationTimestamp().Time)
+	})
+	result := make([]PodInfo, 0, len(pods))
+	for _, pod := range pods {
+		phase, _, _ := unstructured.NestedString(pod.Object, "status", "phase")
+		statuses, _, _ := unstructured.NestedSlice(pod.Object, "status", "containerStatuses")
+		item := PodInfo{Name: pod.GetName(), Phase: phase, Ready: len(statuses) > 0}
+		for _, value := range statuses {
+			status, ok := value.(map[string]any)
+			if !ok {
+				item.Ready = false
+				continue
+			}
+			if ready, ok := status["ready"].(bool); !ok || !ready {
+				item.Ready = false
+			}
+			if count, ok := status["restartCount"].(int64); ok {
+				item.Restarts += count
+			}
+		}
+		result = append(result, item)
+	}
+	return result, nil
+}
+
+func (r *Reader) listOwnedPods(ctx context.Context, accountID, appID string) ([]unstructured.Unstructured, string, error) {
+	namespace, err := kubeobjects.NamespaceName(accountID)
+	if err != nil {
+		return nil, "", err
+	}
+	if _, err := kubeobjects.AppName(appID); err != nil {
+		return nil, "", err
+	}
+	selector := labels.Set{
+		"app.kubernetes.io/managed-by": "polygate",
+		"polygate.io/account-id":       accountID,
+		"polygate.io/app-id":           appID,
+	}.AsSelector().String()
+	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	pods, err := r.client.Resource(schema.GroupVersionResource{Version: "v1", Resource: "pods"}).
+		Namespace(namespace).List(ctx, metav1.ListOptions{LabelSelector: selector, Limit: 20})
+	if err != nil {
+		return nil, "", err
+	}
+	if pods.GetContinue() != "" {
+		return nil, "", fmt.Errorf("too many app pods")
+	}
+	return filterOwnedPods(pods.Items, accountID, appID), namespace, nil
 }
 
 func selectPod(pods []unstructured.Unstructured, accountID, appID, requested string) (unstructured.Unstructured, error) {

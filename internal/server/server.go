@@ -59,6 +59,7 @@ func (h *Handler) SetImageReportReader(read func(context.Context, string, string
 
 type AppLogReader interface {
 	Read(context.Context, string, string, string) (applogs.Result, error)
+	List(context.Context, string, string) ([]applogs.PodInfo, error)
 	Events(context.Context, string, string) ([]applogs.Event, error)
 	Metrics(context.Context, string, string) ([]applogs.PodMetric, error)
 }
@@ -173,6 +174,7 @@ func newHandler(store Store, authenticate func(*http.Request) (Principal, error)
 	mux.HandleFunc("GET /api/v1/apps/{id}/revisions", h.listRevisions)
 	mux.HandleFunc("GET /api/v1/apps/{id}/status", h.getDeploymentStatus)
 	mux.HandleFunc("GET /api/v1/apps/{id}/logs", h.getAppLogs)
+	mux.HandleFunc("GET /api/v1/apps/{id}/pods", h.getAppPods)
 	mux.HandleFunc("GET /api/v1/apps/{id}/logs/history", h.getAppLogHistory)
 	mux.HandleFunc("GET /api/v1/apps/{id}/events", h.getAppEvents)
 	mux.HandleFunc("GET /api/v1/apps/{id}/metrics", h.getAppMetrics)
@@ -646,6 +648,28 @@ func (h *Handler) getAppLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *Handler) getAppPods(w http.ResponseWriter, r *http.Request) {
+	p, ok := h.principal(w, r)
+	if !ok {
+		return
+	}
+	if h.appLogReader == nil {
+		writeError(w, http.StatusServiceUnavailable, "APP_LOGS_DISABLED", "Application pods are unavailable.")
+		return
+	}
+	appID := r.PathValue("id")
+	if _, err := h.store.Get(r.Context(), p.AccountID, appID); err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	items, err := h.appLogReader.List(r.Context(), p.AccountID, appID)
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, "APP_PODS_UNAVAILABLE", "Application pods could not be read.")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 func (h *Handler) getAppLogHistory(w http.ResponseWriter, r *http.Request) {
