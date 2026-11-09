@@ -113,6 +113,7 @@ export type Me = {
 	adminProvisionAvailable: boolean
 	secretAvailable: boolean
 	appAccessBaseURL?: string
+	appAccessRouting?: 'host' | 'path'
 }
 
 export type AdminAccount = {

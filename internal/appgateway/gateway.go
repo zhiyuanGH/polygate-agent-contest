@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -123,12 +124,18 @@ type Gateway struct {
 	Suffixes   []string
 	PublicPort string
 	HostRoutes []HostRoute
+	PathRoutes []PathRoute
 	Transport  http.RoundTripper
 }
 
 type HostRoute struct {
 	Suffix string
 	Port   string
+}
+
+type PathRoute struct {
+	Host string
+	Port string
 }
 
 func stripPlatformCredentials(req *http.Request) {
@@ -228,6 +235,124 @@ func AppIDFromRoutes(host string, routes []HostRoute) (string, error) {
 	return "", ErrNotFound
 }
 
+// ParsePathRoutes accepts exact public hosts. A path route never matches a
+// student-controlled subdomain, and old hostname routes remain independent.
+func ParsePathRoutes(raw string) ([]PathRoute, error) {
+	parts := strings.Split(raw, ",")
+	if len(parts) < 1 || len(parts) > 4 {
+		return nil, errors.New("expected one to four app path routes")
+	}
+	result := make([]PathRoute, 0, len(parts))
+	seen := make(map[string]bool)
+	for _, part := range parts {
+		host, port, ok := strings.Cut(strings.TrimSpace(part), ":")
+		if !ok || strings.Contains(port, ":") || seen[host] {
+			return nil, errors.New("invalid or duplicate app path route")
+		}
+		if _, err := ParseSuffixes(host); err != nil {
+			return nil, err
+		}
+		value, err := strconv.Atoi(port)
+		if err != nil || value < 1 || value > 65535 || strconv.Itoa(value) != port {
+			return nil, errors.New("invalid app path route port")
+		}
+		seen[host] = true
+		result = append(result, PathRoute{Host: host, Port: port})
+	}
+	return result, nil
+}
+
+func pathAppID(req *http.Request, routes []PathRoute) (string, string, bool, bool) {
+	for _, route := range routes {
+		allowed := req.Host == net.JoinHostPort(route.Host, route.Port)
+		if route.Port == "443" {
+			allowed = allowed || req.Host == route.Host
+		}
+		if !allowed {
+			continue
+		}
+		escaped := req.URL.EscapedPath()
+		if !strings.HasPrefix(escaped, "/") {
+			return "", "", true, false
+		}
+		segment, _, _ := strings.Cut(escaped[1:], "/")
+		if !uuidPattern.MatchString(segment) {
+			return "", "", true, false
+		}
+		prefix := "/" + segment
+		if escaped == prefix {
+			return segment, prefix, true, true
+		}
+		return segment, prefix, true, false
+	}
+	return "", "", false, false
+}
+
+func querySuffix(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	return "?" + raw
+}
+
+func rewritePathLocation(response *http.Response, prefix string, target *url.URL, publicHost string) {
+	raw := response.Header.Get("Location")
+	if raw == "" {
+		return
+	}
+	location, err := url.Parse(raw)
+	if err != nil {
+		return
+	}
+	publicName := publicHost
+	if hostname, _, err := net.SplitHostPort(publicHost); err == nil {
+		publicName = hostname
+	}
+	_, targetPort, _ := net.SplitHostPort(target.Host)
+	samePublicHost := location.Hostname() == publicName &&
+		(location.Port() == "" || location.Port() == "80" || location.Port() == "443" || location.Port() == targetPort)
+	if location.Host != "" && location.Host != target.Host && !samePublicHost {
+		return
+	}
+	if location.Host == target.Host || samePublicHost {
+		location.Scheme = "https"
+		location.Host = publicHost
+	}
+	if !strings.HasPrefix(location.Path, "/") || strings.HasPrefix(location.Path, "//") {
+		return
+	}
+	if location.Path != prefix && !strings.HasPrefix(location.Path, prefix+"/") {
+		location.Path = prefix + location.Path
+		location.RawPath = ""
+	}
+	response.Header.Set("Location", location.String())
+}
+
+func scopePathCookies(response *http.Response, prefix string) {
+	raw := response.Header.Values("Set-Cookie")
+	response.Header.Del("Set-Cookie")
+	for _, line := range raw {
+		parsed := (&http.Response{Header: http.Header{"Set-Cookie": {line}}}).Cookies()
+		if len(parsed) != 1 {
+			continue
+		}
+		cookie := parsed[0]
+		if cookie.Domain != "" || platformCookieName(cookie.Name) ||
+			strings.HasPrefix(strings.ToLower(cookie.Name), "__host-") {
+			continue
+		}
+		path := cookie.Path
+		if path == "" || !strings.HasPrefix(path, "/") {
+			path = "/"
+		}
+		if path != prefix && !strings.HasPrefix(path, prefix+"/") {
+			path = prefix + path
+		}
+		cookie.Path = path
+		response.Header.Add("Set-Cookie", cookie.String())
+	}
+}
+
 func (g *Gateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if req.URL.Path == "/healthz" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -238,11 +363,26 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "HTTPS required", http.StatusBadRequest)
 		return
 	}
-	appID, err := AppIDFromHost(req.Host, g.PublicPort, g.Suffixes)
-	if len(g.HostRoutes) > 0 {
-		appID, err = AppIDFromRoutes(req.Host, g.HostRoutes)
+	appID, prefix, pathMode, addSlash := pathAppID(req, g.PathRoutes)
+	if !pathMode {
+		var err error
+		appID, err = AppIDFromHost(req.Host, g.PublicPort, g.Suffixes)
+		if len(g.HostRoutes) > 0 {
+			appID, err = AppIDFromRoutes(req.Host, g.HostRoutes)
+		}
+		if err != nil {
+			http.Error(w, "Unknown app host", http.StatusMisdirectedRequest)
+			return
+		}
+	} else if appID == "" {
+		http.NotFound(w, req)
+		return
 	}
-	if err != nil {
+	if addSlash {
+		http.Redirect(w, req, prefix+"/"+querySuffix(req.URL.RawQuery), http.StatusPermanentRedirect)
+		return
+	}
+	if appID == "" {
 		http.Error(w, "Unknown app host", http.StatusMisdirectedRequest)
 		return
 	}
@@ -255,12 +395,34 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "App routing temporarily unavailable", http.StatusServiceUnavailable)
 		return
 	}
+	upstreamPath, upstreamRawPath := req.URL.Path, req.URL.RawPath
+	if pathMode {
+		upstreamPath = strings.TrimPrefix(upstreamPath, prefix)
+		if upstreamPath == "" {
+			upstreamPath = "/"
+		}
+		if upstreamRawPath != "" {
+			upstreamRawPath = strings.TrimPrefix(upstreamRawPath, prefix)
+			if upstreamRawPath == "" {
+				upstreamRawPath = "/"
+			}
+		}
+	}
 	proxy := &httputil.ReverseProxy{
-		Transport:      g.Transport,
-		FlushInterval:  -1,
-		ModifyResponse: stripAppSetCookies,
+		Transport:     g.Transport,
+		FlushInterval: -1,
+		ModifyResponse: func(response *http.Response) error {
+			if pathMode {
+				rewritePathLocation(response, prefix, target, req.Host)
+				scopePathCookies(response, prefix)
+				return nil
+			}
+			return stripAppSetCookies(response)
+		},
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(target)
+			pr.Out.URL.Path = upstreamPath
+			pr.Out.URL.RawPath = upstreamRawPath
 			pr.Out.Host = pr.In.Host
 			stripPlatformCredentials(pr.Out)
 			pr.Out.Header.Del("Forwarded")
@@ -268,8 +430,13 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			pr.Out.Header.Del("X-Forwarded-Host")
 			pr.Out.Header.Del("X-Forwarded-Proto")
 			pr.SetXForwarded()
+			if pathMode {
+				pr.Out.Header.Set("X-Forwarded-Prefix", prefix)
+				pr.Out.Header.Set("X-Forwarded-Port", "443")
+			}
 		},
-		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, _ error) {
+		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, proxyError error) {
+			log.Printf("app gateway upstream failed: app=%s err=%v", appID, proxyError)
 			http.Error(w, "App backend unavailable", http.StatusBadGateway)
 		},
 	}

@@ -109,6 +109,117 @@ func TestHostRoutesSupportInternalAndPublicCutover(t *testing.T) {
 	}
 }
 
+func TestPathRoutesStripPrefixAndScopeRedirectsAndCookies(t *testing.T) {
+	paths, err := ParsePathRoutes("apps.polylink.org:443")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gotPath, gotHost, gotPrefix, gotProto, gotPort string
+	gateway := &Gateway{Resolver: NewResolver(fake.NewSimpleClientset(service())),
+		Suffixes: []string{testSuffix}, PublicPort: "30444", PathRoutes: paths,
+		Transport: transportFunc(func(req *http.Request) (*http.Response, error) {
+			gotPath, gotHost = req.URL.RequestURI(), req.Host
+			gotPrefix = req.Header.Get("X-Forwarded-Prefix")
+			gotProto, gotPort = req.Header.Get("X-Forwarded-Proto"), req.Header.Get("X-Forwarded-Port")
+			header := make(http.Header)
+			header.Set("Location", "/login?next=%2Fdashboard")
+			header.Add("Set-Cookie", "session=ok; Secure; HttpOnly; SameSite=Lax; Path=/")
+			header.Add("Set-Cookie", "theme=dark; Path=/settings")
+			header.Add("Set-Cookie", "cross=bad; Domain=polylink.org; Path=/")
+			header.Add("Set-Cookie", "__Host-session=bad; Secure; Path=/")
+			return &http.Response{StatusCode: http.StatusFound, Header: header,
+				Body: io.NopCloser(strings.NewReader(""))}, nil
+		})}
+	request := httptest.NewRequest("GET", "https://apps.polylink.org/"+testApp+"/start?x=1", nil)
+	request.Header.Set("X-Forwarded-Prefix", "/other-app")
+	request.Header.Set("X-Forwarded-Port", "8080")
+	response := httptest.NewRecorder()
+	gateway.ServeHTTP(response, request)
+	if response.Code != http.StatusFound || gotPath != "/start?x=1" || gotHost != request.Host ||
+		gotPrefix != "/"+testApp || gotProto != "https" || gotPort != "443" ||
+		response.Header().Get("Location") != "/"+testApp+"/login?next=%2Fdashboard" {
+		t.Fatalf("path gateway mismatch: status=%d upstream=%q host=%q forwarded=%q %q %q location=%q",
+			response.Code, gotPath, gotHost, gotPrefix, gotProto, gotPort, response.Header().Get("Location"))
+	}
+	cookies := response.Result().Cookies()
+	if len(cookies) != 2 || cookies[0].Name != "session" || cookies[0].Path != "/"+testApp+"/" ||
+		!cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteLaxMode ||
+		cookies[1].Name != "theme" || cookies[1].Path != "/"+testApp+"/settings" {
+		t.Fatalf("path cookies escaped their application: %+v", cookies)
+	}
+	missingSlash := httptest.NewRecorder()
+	gateway.ServeHTTP(missingSlash, httptest.NewRequest("GET", "https://apps.polylink.org/"+testApp+"?q=1", nil))
+	if missingSlash.Code != http.StatusPermanentRedirect || missingSlash.Header().Get("Location") != "/"+testApp+"/?q=1" {
+		t.Fatalf("app root was not canonicalized: %d %q", missingSlash.Code, missingSlash.Header().Get("Location"))
+	}
+	unknown := httptest.NewRecorder()
+	gateway.ServeHTTP(unknown, httptest.NewRequest("GET", "https://apps.polylink.org/not-an-app/", nil))
+	if unknown.Code != http.StatusNotFound {
+		t.Fatalf("invalid app ID was not rejected: %d", unknown.Code)
+	}
+	internal := httptest.NewRecorder()
+	gateway.ServeHTTP(internal, httptest.NewRequest("GET", "https://"+testApp+"."+testSuffix+":30444/", nil))
+	if internal.Code != http.StatusFound {
+		t.Fatalf("legacy app host failed after path route added: %d", internal.Code)
+	}
+}
+
+func TestPathRouteRejectsInvalidHostAndRewritesInternalAbsoluteRedirect(t *testing.T) {
+	for _, raw := range []string{"", "apps.polylink.org", "apps.polylink.org:0", "apps.polylink.org:0443",
+		"apps.polylink.org:443,apps.polylink.org:30444", "APPS.polylink.org:443"} {
+		if _, err := ParsePathRoutes(raw); err == nil {
+			t.Errorf("invalid path route accepted: %q", raw)
+		}
+	}
+	paths, _ := ParsePathRoutes("apps.polylink.org:443")
+	gateway := &Gateway{Resolver: NewResolver(fake.NewSimpleClientset(service())), PathRoutes: paths,
+		Transport: transportFunc(func(req *http.Request) (*http.Response, error) {
+			header := make(http.Header)
+			if req.URL.Path == "/port" {
+				header.Set("Location", "http://"+req.Host+":8080/next")
+			} else {
+				header.Set("Location", "http://"+req.URL.Host+"/next")
+			}
+			return &http.Response{StatusCode: 302, Header: header, Body: io.NopCloser(strings.NewReader(""))}, nil
+		})}
+	response := httptest.NewRecorder()
+	gateway.ServeHTTP(response, httptest.NewRequest("GET", "https://apps.polylink.org/"+testApp+"/", nil))
+	if response.Header().Get("Location") != "https://apps.polylink.org/"+testApp+"/next" {
+		t.Fatalf("internal absolute redirect leaked: %q", response.Header().Get("Location"))
+	}
+	internalPort := httptest.NewRecorder()
+	gateway.ServeHTTP(internalPort, httptest.NewRequest("GET", "https://apps.polylink.org/"+testApp+"/port", nil))
+	if internalPort.Header().Get("Location") != "https://apps.polylink.org/"+testApp+"/next" {
+		t.Fatalf("app internal port leaked in redirect: %q", internalPort.Header().Get("Location"))
+	}
+	badHost := httptest.NewRecorder()
+	gateway.ServeHTTP(badHost, httptest.NewRequest("GET", "https://evil.apps.polylink.org/"+testApp+"/", nil))
+	if badHost.Code != http.StatusMisdirectedRequest {
+		t.Fatalf("unexpected path host accepted: %d", badHost.Code)
+	}
+}
+
+func TestPathRoutePreservesEscapedSuffixAndExternalRedirect(t *testing.T) {
+	var gotURI string
+	gateway := &Gateway{Resolver: NewResolver(fake.NewSimpleClientset(service())),
+		PathRoutes: []PathRoute{{Host: "apps.polylink.org", Port: "443"}},
+		Transport: transportFunc(func(req *http.Request) (*http.Response, error) {
+			gotURI = req.URL.RequestURI()
+			header := make(http.Header)
+			header.Set("Location", "https://identity.example.org/login")
+			return &http.Response{StatusCode: 302, Header: header,
+				Body: io.NopCloser(strings.NewReader(""))}, nil
+		})}
+	response := httptest.NewRecorder()
+	gateway.ServeHTTP(response, httptest.NewRequest("GET",
+		"https://apps.polylink.org/"+testApp+"/files/a%2Fb?download=1", nil))
+	if response.Code != 302 || gotURI != "/files/a%2Fb?download=1" ||
+		response.Header().Get("Location") != "https://identity.example.org/login" {
+		t.Fatalf("escaped path or external redirect changed: %d %q %q",
+			response.Code, gotURI, response.Header().Get("Location"))
+	}
+}
+
 type transportFunc func(*http.Request) (*http.Response, error)
 
 func (f transportFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
@@ -336,5 +447,66 @@ func TestGatewayPassesWebSocketUpgradeAndBidirectionalBytes(t *testing.T) {
 	response := make([]byte, 4)
 	if _, err := io.ReadFull(reader, response); err != nil || string(response) != "ping" {
 		t.Fatalf("WebSocket bytes did not pass both ways: %q %v", response, err)
+	}
+}
+
+func TestPathGatewayPassesWebSocketUpgradeAndBidirectionalBytes(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Path != "/socket" || req.Header.Get("X-Forwarded-Prefix") != "/"+testApp ||
+			req.Header.Get("Upgrade") != "websocket" {
+			http.Error(w, "unexpected WebSocket request", http.StatusBadRequest)
+			return
+		}
+		connection, _, err := w.(http.Hijacker).Hijack()
+		if err != nil {
+			return
+		}
+		defer connection.Close()
+		_, _ = io.WriteString(connection, "HTTP/1.1 101 Switching Protocols\r\n"+
+			"Connection: Upgrade\r\nUpgrade: websocket\r\n"+
+			"Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\r\n\r\n")
+		buffer := make([]byte, 4)
+		if _, err := io.ReadFull(connection, buffer); err == nil {
+			_, _ = connection.Write(buffer)
+		}
+	}))
+	defer backend.Close()
+	gateway := gatewayForBackend(backend)
+	gateway.PathRoutes = []PathRoute{{Host: "apps.polylink.org", Port: "443"}}
+	server := httptest.NewTLSServer(gateway)
+	defer server.Close()
+	connection, err := tls.Dial("tcp", server.Listener.Addr().String(), &tls.Config{InsecureSkipVerify: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	_ = connection.SetDeadline(time.Now().Add(5 * time.Second))
+	_, err = fmt.Fprintf(connection, "GET /%s/socket HTTP/1.1\r\nHost: apps.polylink.org\r\n"+
+		"Connection: Upgrade\r\nUpgrade: websocket\r\n"+
+		"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"+
+		"Sec-WebSocket-Version: 13\r\n\r\n", testApp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader := bufio.NewReader(connection)
+	status, err := reader.ReadString('\n')
+	if err != nil || !strings.Contains(status, "101 Switching Protocols") {
+		t.Fatalf("path WebSocket upgrade failed: %q %v", status, err)
+	}
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			t.Fatal(err)
+		}
+		if line == "\r\n" {
+			break
+		}
+	}
+	if _, err := connection.Write([]byte("ping")); err != nil {
+		t.Fatal(err)
+	}
+	response := make([]byte, 4)
+	if _, err := io.ReadFull(reader, response); err != nil || string(response) != "ping" {
+		t.Fatalf("path WebSocket bytes did not pass both ways: %q %v", response, err)
 	}
 }

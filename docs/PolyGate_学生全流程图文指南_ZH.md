@@ -6,9 +6,9 @@
 
 ## 开始前准备
 
-- 连接实验室内网，用桌面浏览器打开 **<https://YOUR-POLYGATE-HOST/>**。
+- 用桌面浏览器打开 **<https://polygate.polylink.org/>**。旧实验室内网入口 **<https://YOUR-POLYGATE-HOST/>** 保留用于回退。
 - 准备实验室管理员发给你的平台用户名和初始密码。不要使用别人的账号。
-- 当前内网试点使用自签名证书。浏览器出现证书提示时，先核对地址确实是 `YOUR-POLYGATE-HOST`，再决定继续访问。
+- 公网域名使用浏览器可信的 HTTPS 证书。旧内网 IP 入口使用自签名证书；若走旧入口，应先核对 IP 和端口。
 - 新账号第一次登录可能进入 Keycloak 的修改临时密码页面。按照页面要求设置新密码后，才会进入工作区。下面的截图使用已经完成首次改密的测试账号。
 - 即使浏览器启用深色模式，登录表单也固定使用对比度清楚的 PolyGate 浅色配色。
 
@@ -72,7 +72,7 @@
 
 ### 第 8 步：等待 Running，打开作品
 
-页面回到 **Overview** 后，在中间工作区向下滚动到 **Applications**。新应用状态会逐步变化，最终应显示 **Running**。在同一行点击 **Open app**。示例页面打开后点击 **Ask agent**，下方会出现本地生成的模拟回复；不会调用云端模型，也不会产生模型 token 费用。
+页面回到 **Overview** 后，在中间工作区向下滚动到 **Applications**。新应用状态会逐步变化，最终应显示 **Running**。在同一行点击 **Open app**。公网作品地址为 `https://apps.polylink.org/<app-id>/`，其中 app ID 是固定标识，不是显示名称。示例页面打开后点击 **Ask agent**，下方会出现本地生成的模拟回复；不会调用云端模型，也不会产生模型 token 费用。
 
 ![Running 状态及该应用操作按钮](../web/public/guide-17-app-running.png)
 

@@ -19,9 +19,9 @@ pre{background:#f7f2f3;padding:14px;overflow:auto}pre code{background:none;paddi
 <p>本文按照一次真实浏览器操作，带你完成 <strong>下载 Python 示例 ZIP → 上传构建 → 镜像审核 → 部署 → 访问作品 → 查看日志 → 停止 → 删除</strong>。截图取自 2026 年 11 月 9 日的实验室内网试点，桌面浏览器尺寸为 1366 × 768。你看到的应用名称和时间会不同。平台按钮仍是英文；下文保留按钮原文，方便直接对照页面。本示例不需要云端模型 API Key。</p>
 <h2>开始前准备</h2>
 <ul>
-<li>连接实验室内网，用桌面浏览器打开 <strong><a href="https://YOUR-POLYGATE-HOST/">https://YOUR-POLYGATE-HOST/</a></strong>。</li>
+<li>用桌面浏览器打开 <strong><a href="https://polygate.polylink.org/">https://polygate.polylink.org/</a></strong>。旧实验室内网入口 <a href="https://YOUR-POLYGATE-HOST/">https://YOUR-POLYGATE-HOST/</a> 保留用于回退。</li>
 <li>准备实验室管理员发给你的平台用户名和初始密码。不要使用别人的账号。</li>
-<li>当前内网试点使用自签名证书。浏览器出现证书提示时，先核对地址确实是 <code>YOUR-POLYGATE-HOST</code>，再决定继续访问。</li>
+<li>公网域名使用浏览器可信的 HTTPS 证书。旧内网 IP 入口使用自签名证书；若走旧入口，应先核对 IP 和端口。</li>
 <li>新账号第一次登录可能进入 Keycloak 的修改临时密码页面。按照页面要求设置新密码后，才会进入工作区。下面的截图使用已经完成首次改密的测试账号。</li>
 <li>即使浏览器启用深色模式，登录表单也固定使用对比度清楚的 PolyGate 浅色配色。</li>
 </ul>
@@ -55,7 +55,7 @@ pre{background:#f7f2f3;padding:14px;overflow:auto}pre code{background:none;paddi
 <p>第一次测试可保持默认资源：<strong>CPU request</strong> 为 <code>250 m</code>，<strong>CPU limit</strong> 为 <code>1000 m</code>，<strong>Memory</strong> 为 <code>1024 MiB</code>，<strong>Replicas</strong> 为 <code>1</code>，<strong>Use persistent storage</strong> 关闭。在中间工作区向下滚动，点击一次 <strong>Create and deploy</strong>。平台会建立草稿并排队部署。单容器内存最多可选 4096 MiB（4 GiB），但账号和集群总额度仍会限制能否部署。</p>
 <p><img alt="资源设置及 Create and deploy 按钮" src="/guide-16b-create-app-resources.png" /></p>
 <h3>第 8 步：等待 Running，打开作品</h3>
-<p>页面回到 <strong>Overview</strong> 后，在中间工作区向下滚动到 <strong>Applications</strong>。新应用状态会逐步变化，最终应显示 <strong>Running</strong>。在同一行点击 <strong>Open app</strong>。示例页面打开后点击 <strong>Ask agent</strong>，下方会出现本地生成的模拟回复；不会调用云端模型，也不会产生模型 token 费用。</p>
+<p>页面回到 <strong>Overview</strong> 后，在中间工作区向下滚动到 <strong>Applications</strong>。新应用状态会逐步变化，最终应显示 <strong>Running</strong>。在同一行点击 <strong>Open app</strong>。公网作品地址为 <code>https://apps.polylink.org/&lt;app-id&gt;/</code>，其中 app ID 是固定标识，不是显示名称。示例页面打开后点击 <strong>Ask agent</strong>，下方会出现本地生成的模拟回复；不会调用云端模型，也不会产生模型 token 费用。</p>
 <p><img alt="Running 状态及该应用操作按钮" src="/guide-17-app-running.png" /></p>
 <p><img alt="Mock Agent 作品页面与模拟回复" src="/guide-18-open-app.png" /></p>
 <h3>第 9 步：查看日志和资源用量</h3>

@@ -22,6 +22,7 @@ func main() {
 	}
 	var suffixes []string
 	var routes []appgateway.HostRoute
+	var pathRoutes []appgateway.PathRoute
 	var err error
 	port := os.Getenv("POLYGATE_APP_PUBLIC_PORT")
 	if raw := os.Getenv("POLYGATE_APP_HOST_ROUTES"); raw != "" {
@@ -34,6 +35,12 @@ func main() {
 	}
 	if err != nil {
 		log.Fatal(err)
+	}
+	if raw := os.Getenv("POLYGATE_APP_PATH_ROUTES"); raw != "" {
+		pathRoutes, err = appgateway.ParsePathRoutes(raw)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 	config, err := rest.InClusterConfig()
 	if err != nil {
@@ -60,6 +67,7 @@ func main() {
 			Suffixes:   suffixes,
 			PublicPort: port,
 			HostRoutes: routes,
+			PathRoutes: pathRoutes,
 			Transport:  transport,
 		},
 		ReadHeaderTimeout: 10 * time.Second,

@@ -6,9 +6,9 @@ This guide follows a real **Python ZIP → build → approved image → running 
 
 ## Before you start
 
-- Connect to the laboratory network and use a current desktop browser. Open **<https://YOUR-POLYGATE-HOST/>**.
+- Use a current desktop browser. Open **<https://polygate.polylink.org/>**. The old laboratory entry **<https://YOUR-POLYGATE-HOST/>** remains available for fallback.
 - Have the username and initial password supplied by the laboratory operator. Do not use someone else's account.
-- The pilot certificate is self-signed. Confirm that the browser address is exactly `YOUR-POLYGATE-HOST` before accepting its certificate warning.
+- The public URL uses a browser-trusted HTTPS certificate. The old laboratory IP entry uses a self-signed certificate; confirm that exact IP and port before accepting its warning.
 - A new account may first be asked to change its temporary password. Finish that Keycloak screen, then continue to the workspace. The screenshots below use an account whose password was already changed.
 - The sign-in form stays in the readable PolyGate light palette even when your browser uses dark mode.
 
@@ -72,7 +72,7 @@ For a first test, leave **CPU request** at `250 m`, **CPU limit** at `1000 m`, *
 
 ### Step 8 — Wait for Running and open the app
 
-PolyGate returns to **Overview**. Scroll the main workspace to **Applications**. The new row moves through deployment states and should reach **Running**. Select **Open app** in that row. On the sample page, select **Ask agent**; a local mock reply appears. This example uses no cloud model API and consumes no model tokens.
+PolyGate returns to **Overview**. Scroll the main workspace to **Applications**. The new row moves through deployment states and should reach **Running**. Select **Open app** in that row. Its public URL is `https://apps.polylink.org/<app-id>/`; the app ID is the stable identifier, not the display name. On the sample page, select **Ask agent**; a local mock reply appears. This example uses no cloud model API and consumes no model tokens.
 
 ![Running app and its actions](../web/public/guide-17-app-running.png)
 

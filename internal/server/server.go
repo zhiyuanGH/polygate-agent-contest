@@ -395,6 +395,7 @@ func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
 		"appLogHistoryAvailable":     h.appLogReader != nil && os.Getenv("POLYGATE_LOKI_URL") != "",
 		"secretAvailable":            h.secretCatalog != nil,
 		"appAccessBaseURL":           os.Getenv("POLYGATE_APP_ACCESS_BASE_URL"),
+		"appAccessRouting":           os.Getenv("POLYGATE_APP_ACCESS_ROUTING"),
 		"adminQuotaAvailable":        account.Role == "admin" && h.adminQuotaEnabled,
 		"adminProvisionAvailable":    account.Role == "admin" && os.Getenv("POLYGATE_ADMIN_PROVISION_ENABLED") == "1",
 		"message":                    message,
