@@ -58,7 +58,7 @@ func (h *Handler) SetImageReportReader(read func(context.Context, string, string
 }
 
 type AppLogReader interface {
-	Read(context.Context, string, string, string) (applogs.Result, error)
+	Read(context.Context, string, string, string, bool) (applogs.Result, error)
 	List(context.Context, string, string) ([]applogs.PodInfo, error)
 	Events(context.Context, string, string) ([]applogs.Event, error)
 	Metrics(context.Context, string, string) ([]applogs.PodMetric, error)
@@ -639,9 +639,18 @@ func (h *Handler) getAppLogs(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "INVALID_POD", "Select a valid app pod.")
 		return
 	}
-	result, err := h.appLogReader.Read(r.Context(), p.AccountID, appID, requestedPod)
+	previousValue := r.URL.Query().Get("previous")
+	if previousValue != "" && previousValue != "1" {
+		writeError(w, http.StatusBadRequest, "INVALID_LOG_ATTEMPT", "Select the current or previous container attempt.")
+		return
+	}
+	result, err := h.appLogReader.Read(r.Context(), p.AccountID, appID, requestedPod, previousValue == "1")
 	if errors.Is(err, applogs.ErrNoPods) || errors.Is(err, applogs.ErrPodNotFound) {
 		writeError(w, http.StatusNotFound, "APP_POD_NOT_FOUND", "No matching app pod is available.")
+		return
+	}
+	if errors.Is(err, applogs.ErrNoPreviousLogs) {
+		writeError(w, http.StatusNotFound, "PREVIOUS_LOGS_NOT_FOUND", "No previous container output is available for this Pod.")
 		return
 	}
 	if err != nil {

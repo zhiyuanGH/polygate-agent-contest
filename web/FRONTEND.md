@@ -36,6 +36,8 @@ Overview 的 Diagnostics 弹窗先用 `GET /api/v1/apps/{id}/pods` 列出当前 
 
 构建日志弹窗保留构建步骤顺序，默认自动滚动到最新输出；用户手动向上滚动会暂停跟随，滚动到底部或重新打开 **Follow latest output** 可恢复跟随。浏览器测试使用真实完成的构建日志验证打开、暂停和恢复，不修改构建任务。
 
+当前容器日志支持可选 `?previous=1`。后端先按账号和 App 校验 Pod 归属，再核对 `app` 容器至少重启一次，才向 Kubernetes 请求上一次容器日志；没有前一次输出时返回 `PREVIOUS_LOGS_NOT_FOUND`（404）。Diagnostics 只有在所选 Pod 有重启记录时才启用 **Previous attempt**，切换会使用独立的查询缓存键。已删除 Pod 的旧输出仍从 Historical container logs 查询。
+
 ## 本地开发和验证
 
 在仓库根目录运行：

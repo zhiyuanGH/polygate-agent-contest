@@ -59,12 +59,16 @@ func TestReaderBoundsLogAndUsesOwnedNamespace(t *testing.T) {
 				t.Errorf("wrong selector: %s", selector)
 			}
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"apiVersion":"v1","kind":"PodList","metadata":{"resourceVersion":"1"},"items":[{"apiVersion":"v1","kind":"Pod","metadata":{"name":"` + name + `","labels":{"app.kubernetes.io/managed-by":"polygate","polygate.io/account-id":"` + account + `","polygate.io/app-id":"` + app + `"}}}]}`))
+			_, _ = w.Write([]byte(`{"apiVersion":"v1","kind":"PodList","metadata":{"resourceVersion":"1"},"items":[{"apiVersion":"v1","kind":"Pod","metadata":{"name":"` + name + `","labels":{"app.kubernetes.io/managed-by":"polygate","polygate.io/account-id":"` + account + `","polygate.io/app-id":"` + app + `"}},"status":{"containerStatuses":[{"name":"app","restartCount":1}]}}]}`))
 			return
 		}
 		if r.URL.Path != "/api/v1/namespaces/"+namespace+"/pods/"+name+"/log" ||
 			r.URL.Query().Has("limitBytes") || r.URL.Query().Get("tailLines") != "200" {
 			t.Errorf("wrong Pod log request: %s?%s", r.URL.Path, r.URL.RawQuery)
+		}
+		if r.URL.Query().Get("previous") == "true" {
+			_, _ = w.Write([]byte("previous attempt\n"))
+			return
 		}
 		_, _ = w.Write([]byte("oldest\n" + strings.Repeat("x", 200000) + "\nnewest\n"))
 	}))
@@ -74,10 +78,14 @@ func TestReaderBoundsLogAndUsesOwnedNamespace(t *testing.T) {
 		t.Fatal(err)
 	}
 	reader := &Reader{client: client, http: server.Client(), host: server.URL}
-	result, err := reader.Read(t.Context(), account, app, "")
+	result, err := reader.Read(t.Context(), account, app, "", false)
 	if err != nil || result.Pod != name || len(result.Data) > int(maxLogBytes) ||
 		!strings.Contains(result.Data, "newest\n") || strings.Contains(result.Data, "oldest\n") {
 		t.Fatalf("bounded Pod log read failed: pod=%s bytes=%d err=%v", result.Pod, len(result.Data), err)
+	}
+	previous, err := reader.Read(t.Context(), account, app, name, true)
+	if err != nil || !previous.Previous || previous.Pod != name || previous.Data != "previous attempt\n" {
+		t.Fatalf("previous attempt read failed: %+v %v", previous, err)
 	}
 }
 

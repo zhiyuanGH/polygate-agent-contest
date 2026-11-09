@@ -142,6 +142,7 @@ function Overview() {
   const revisions = useQuery({ queryKey: ['revisions', rollbackAppId], queryFn: () => api.appRevisions(rollbackAppId!), enabled: rollbackAppId !== null })
   const [logsApp, setLogsApp] = useState<AppRecord | null>(null)
   const [selectedLogPod, setSelectedLogPod] = useState('')
+  const [previousLogAttempt, setPreviousLogAttempt] = useState(false)
   const [historyHours, setHistoryHours] = useState<24 | 168>(24)
   const [historyPod, setHistoryPod] = useState('')
   const [knownHistoryPods, setKnownHistoryPods] = useState<string[]>([])
@@ -150,14 +151,16 @@ function Overview() {
     refetchInterval: logsApp !== null && logsApp.status !== 'Stopped' ? 5000 : false })
   const activeLogPod = appPods.data?.some(pod => pod.name === selectedLogPod) ? selectedLogPod : undefined
   const diagnosticPod = appPods.data?.find(pod => pod.name === activeLogPod) ?? appPods.data?.[0]
+  const previousAvailable = (diagnosticPod?.restarts ?? 0) > 0
+  const activePreviousLogAttempt = previousLogAttempt && previousAvailable
   const podDiagnostic = diagnosticPod ? [
     diagnosticPod.waitingReason && `Waiting: ${diagnosticPod.waitingReason}`,
     diagnosticPod.reason && `Pod: ${diagnosticPod.reason}`,
     diagnosticPod.message,
     diagnosticPod.lastTerminationReason && `Previous exit: ${diagnosticPod.lastTerminationReason}${diagnosticPod.lastExitCode === undefined ? '' : ` (code ${diagnosticPod.lastExitCode})`}`,
   ].filter(Boolean).join(' · ') : ''
-  const appLogs = useQuery({ queryKey: ['appLogs', logsApp?.id, activeLogPod],
-    queryFn: () => api.appLogs(logsApp!.id, activeLogPod),
+  const appLogs = useQuery({ queryKey: ['appLogs', logsApp?.id, activeLogPod, activePreviousLogAttempt],
+    queryFn: () => api.appLogs(logsApp!.id, activeLogPod, activePreviousLogAttempt),
     enabled: logsApp !== null && logsApp.status !== 'Stopped' && (appPods.data?.length ?? 0) > 0,
     refetchInterval: logsApp !== null && logsApp.status !== 'Stopped' ? 5000 : false })
   const appLogHistory = useInfiniteQuery({ queryKey: ['appLogHistory', logsApp?.id, historyHours, historyPod],
@@ -165,6 +168,7 @@ function Overview() {
     initialPageParam: '', getNextPageParam: page => page.nextBefore || undefined,
     enabled: logsApp !== null && me.data?.appLogHistoryAvailable === true, refetchOnWindowFocus: false })
   useEffect(() => { setHistoryPod(''); setKnownHistoryPods([]) }, [logsApp?.id])
+  useEffect(() => { setPreviousLogAttempt(false) }, [logsApp?.id, diagnosticPod?.name])
   useEffect(() => {
     if (!logsApp) return
     const discovered = [...(appPods.data ?? []).map(pod => pod.name),
@@ -287,16 +291,20 @@ function Overview() {
         {appPods.error && <Alert type="error" showIcon message="Could not list application Pods" description={appPods.error.message} />}
         {appPods.isPending && <Spin />}
         {appPods.data && appPods.data.length > 0 && <Select aria-label="Container Pod" value={activeLogPod ?? ''}
-          onChange={setSelectedLogPod} style={{ width: '100%', marginBottom: 12 }}
+          onChange={pod => { setSelectedLogPod(pod); setPreviousLogAttempt(false) }} style={{ width: '100%', marginBottom: 12 }}
           options={[{ value: '', label: 'Latest Pod' }, ...appPods.data.map(pod => ({ value: pod.name,
             label: `${pod.name} · ${pod.ready ? 'Ready' : pod.phase || 'Not ready'} · ${pod.restarts} restarts` }))]} />}
+        {appPods.data && appPods.data.length > 0 && <Space style={{ marginBottom: 12 }}>
+          <Switch size="small" aria-label="Previous container attempt" checked={activePreviousLogAttempt} disabled={!previousAvailable} onChange={setPreviousLogAttempt} />
+          <Text type="secondary">Previous attempt{previousAvailable ? ' (available after a restart)' : ' (no restart recorded)'}</Text>
+        </Space>}
         {diagnosticPod && podDiagnostic && <Alert type="warning" showIcon style={{ marginBottom: 12 }}
           message={`${diagnosticPod.name}: ${diagnosticPod.ready ? 'Ready' : diagnosticPod.phase || 'Not ready'}; ${diagnosticPod.restarts} restarts`}
           description={podDiagnostic} />}
         {appPods.data?.length === 0 && <Paragraph type="secondary">No current Pod. Check historical logs and recent events below.</Paragraph>}
         {appLogs.error && <Alert type="error" showIcon message="Could not load application logs" description={appLogs.error.message} />}
         {appLogs.isPending && <Spin />}
-        {appLogs.data && <><Text type="secondary">Pod: {appLogs.data.pod}</Text><pre style={{ maxHeight: 440, overflow: 'auto', padding: 12, background: '#111827', color: '#f9fafb', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{appLogs.data.data ? newestFirstLines(appLogs.data.data) : 'No output yet.'}</pre></>}</>}
+        {appLogs.data && <><Text type="secondary">Pod: {appLogs.data.pod} · {appLogs.data.previous ? 'Previous attempt' : 'Current attempt'}</Text><pre style={{ maxHeight: 440, overflow: 'auto', padding: 12, background: '#111827', color: '#f9fafb', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{appLogs.data.data ? newestFirstLines(appLogs.data.data) : 'No output yet.'}</pre></>}</>}
       {me.data?.appLogHistoryAvailable && <><Title level={5}>Historical container logs</Title>
         <Paragraph type="secondary">Up to seven days of logs, newest first. Each page shows up to 200 lines; load older pages to discover removed Pods. Select a Pod to filter its history. Refresh to load new lines.</Paragraph>
         <Select aria-label="Historical log range" value={historyHours} onChange={setHistoryHours} options={[{ value: 24, label: 'Last 24 hours' }, { value: 168, label: 'Last 7 days' }]} style={{ width: 160, marginBottom: 12 }} />

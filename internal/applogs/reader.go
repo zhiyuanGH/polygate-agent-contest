@@ -24,13 +24,15 @@ import (
 
 var ErrNoPods = errors.New("no app pods")
 var ErrPodNotFound = errors.New("pod is not part of this app")
+var ErrNoPreviousLogs = errors.New("no previous container logs")
 
 const maxLogBytes int64 = 128 << 10
 const maxLogResponseBytes int64 = 4 << 20
 
 type Result struct {
-	Pod  string `json:"pod"`
-	Data string `json:"data"`
+	Pod      string `json:"pod"`
+	Data     string `json:"data"`
+	Previous bool   `json:"previous"`
 }
 
 type PodInfo struct {
@@ -71,7 +73,7 @@ func NewInCluster() (*Reader, error) {
 		lokiURL: os.Getenv("POLYGATE_LOKI_URL"), lokiHTTP: &http.Client{Timeout: 8 * time.Second}}, nil
 }
 
-func (r *Reader) Read(ctx context.Context, accountID, appID, requestedPod string) (Result, error) {
+func (r *Reader) Read(ctx context.Context, accountID, appID, requestedPod string, previous bool) (Result, error) {
 	pods, namespace, err := r.listOwnedPods(ctx, accountID, appID)
 	if err != nil {
 		return Result{}, err
@@ -82,9 +84,27 @@ func (r *Reader) Read(ctx context.Context, accountID, appID, requestedPod string
 	if err != nil {
 		return Result{}, err
 	}
+	if previous {
+		statuses, _, _ := unstructured.NestedSlice(pod.Object, "status", "containerStatuses")
+		available := false
+		for _, value := range statuses {
+			status, ok := value.(map[string]any)
+			if !ok || status["name"] != "app" {
+				continue
+			}
+			count, _ := status["restartCount"].(int64)
+			available = count > 0
+		}
+		if !available {
+			return Result{}, ErrNoPreviousLogs
+		}
+	}
 	endpoint := strings.TrimRight(r.host, "/") + "/api/v1/namespaces/" + namespace +
 		"/pods/" + url.PathEscape(pod.GetName()) + "/log"
 	query := url.Values{"container": {"app"}, "tailLines": {"200"}, "timestamps": {"true"}}
+	if previous {
+		query.Set("previous", "true")
+	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"?"+query.Encode(), nil)
 	if err != nil {
 		return Result{}, err
@@ -95,6 +115,9 @@ func (r *Reader) Read(ctx context.Context, accountID, appID, requestedPod string
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
+		if previous && response.StatusCode == http.StatusBadRequest {
+			return Result{}, ErrNoPreviousLogs
+		}
 		return Result{}, fmt.Errorf("pod log request returned HTTP %d", response.StatusCode)
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, maxLogResponseBytes+1))
@@ -110,7 +133,7 @@ func (r *Reader) Read(ctx context.Context, accountID, appID, requestedPod string
 			data = data[firstNewline+1:]
 		}
 	}
-	return Result{Pod: pod.GetName(), Data: string(data)}, nil
+	return Result{Pod: pod.GetName(), Data: string(data), Previous: previous}, nil
 }
 
 func (r *Reader) List(ctx context.Context, accountID, appID string) ([]PodInfo, error) {

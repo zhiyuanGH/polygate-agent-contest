@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"polygate/internal/applogs"
@@ -14,12 +15,17 @@ import (
 type fakeAppLogReader struct {
 	calls        int
 	emptyMetrics bool
+	lastPrevious bool
 }
 
-func (r *fakeAppLogReader) Read(_ context.Context, _, _, pod string) (applogs.Result, error) {
+func (r *fakeAppLogReader) Read(_ context.Context, _, _, pod string, previous bool) (applogs.Result, error) {
 	r.calls++
+	r.lastPrevious = previous
 	if pod == "foreign-pod" {
 		return applogs.Result{}, applogs.ErrPodNotFound
+	}
+	if previous {
+		return applogs.Result{Pod: "owned-pod", Data: "previous\n", Previous: true}, nil
 	}
 	return applogs.Result{Pod: "owned-pod", Data: "hello\n"}, nil
 }
@@ -185,5 +191,15 @@ func TestAppLogsRequireOwnedAppBeforeClusterRead(t *testing.T) {
 	}
 	if w := request("student-a", "/history?hours=24&pod=foreign-pod"); w.Code != http.StatusBadRequest || reader.calls != 8 {
 		t.Fatalf("invalid history pod accepted: status=%d readerCalls=%d", w.Code, reader.calls)
+	}
+	if w := request("student-b", "?previous=1"); w.Code != http.StatusNotFound || reader.calls != 8 {
+		t.Fatalf("foreign previous attempt leaked: status=%d readerCalls=%d", w.Code, reader.calls)
+	}
+	if w := request("student-a", "?previous=invalid"); w.Code != http.StatusBadRequest || reader.calls != 8 {
+		t.Fatalf("invalid log attempt accepted: status=%d readerCalls=%d", w.Code, reader.calls)
+	}
+	if w := request("student-a", "?previous=1"); w.Code != http.StatusOK || !reader.lastPrevious || reader.calls != 9 ||
+		!strings.Contains(w.Body.String(), `"previous":true`) {
+		t.Fatalf("previous attempt not selected: status=%d calls=%d body=%s", w.Code, reader.calls, w.Body.String())
 	}
 }
