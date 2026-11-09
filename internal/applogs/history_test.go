@@ -30,7 +30,7 @@ func TestHistoryQueriesOnlyOwnedLabelsAndFiltersResponse(t *testing.T) {
 	}))
 	defer server.Close()
 	reader := &Reader{lokiURL: server.URL, lokiHTTP: server.Client()}
-	result, err := reader.History(context.Background(), account, app, 24, "")
+	result, err := reader.History(context.Background(), account, app, 24, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,15 +64,51 @@ func TestHistoryPagesDoNotRepeatBoundaryLine(t *testing.T) {
 	}))
 	defer server.Close()
 	reader := &Reader{lokiURL: server.URL, lokiHTTP: server.Client()}
-	first, err := reader.History(context.Background(), account, app, 24, "")
+	first, err := reader.History(context.Background(), account, app, 24, "", "")
 	if err != nil || len(first.Items) != 200 || first.NextBefore != strconv.FormatInt(newest-199, 10) {
 		t.Fatalf("first page incomplete: count=%d cursor=%s err=%v", len(first.Items), first.NextBefore, err)
 	}
-	second, err := reader.History(context.Background(), account, app, 24, first.NextBefore)
+	second, err := reader.History(context.Background(), account, app, 24, first.NextBefore, "")
 	if err != nil || len(second.Items) != 1 || second.Items[0].Line != "older" || second.NextBefore != "" {
 		t.Fatalf("second page repeated or missing: %+v err=%v", second, err)
 	}
-	if _, err := reader.History(context.Background(), account, app, 24, "not-a-cursor"); !errors.Is(err, ErrInvalidHistoryCursor) {
+	if _, err := reader.History(context.Background(), account, app, 24, "not-a-cursor", ""); !errors.Is(err, ErrInvalidHistoryCursor) {
 		t.Fatalf("invalid cursor accepted: %v", err)
+	}
+}
+
+func TestHistoryPodFilterStaysWithinOwnedApp(t *testing.T) {
+	const account = "fb056bb4-cf9f-4faa-af71-5aad4c10b46b"
+	const app = "bfaa67a4-cfaf-48d5-a047-b9cbb15bb147"
+	pod := "app-bfaa67a4cfaf48d5a047b9cbb15bb147-abcde12345-abcde"
+	other := "app-bfaa67a4cfaf48d5a047b9cbb15bb147-fffff12345-fffff"
+	queries := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		queries++
+		if got := r.URL.Query().Get("query"); got != `{account_id="`+account+`",app_id="`+app+`",pod="`+pod+`"}` {
+			t.Errorf("pod filter missing from scoped Loki query: %q", got)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "success", "data": map[string]any{
+			"result": []any{
+				map[string]any{"stream": map[string]string{"account_id": account, "app_id": app, "pod": pod},
+					"values": [][]string{{strconv.FormatInt(time.Now().UnixNano(), 10), "selected"}}},
+				map[string]any{"stream": map[string]string{"account_id": account, "app_id": app, "pod": other},
+					"values": [][]string{{strconv.FormatInt(time.Now().UnixNano(), 10), "other"}}},
+			},
+		}})
+	}))
+	defer server.Close()
+	reader := &Reader{lokiURL: server.URL, lokiHTTP: server.Client()}
+	result, err := reader.History(context.Background(), account, app, 24, "", pod)
+	if err != nil || len(result.Items) != 1 || result.Items[0].Pod != pod || result.Items[0].Line != "selected" {
+		t.Fatalf("pod filter leaked another stream: %+v %v", result, err)
+	}
+	for _, invalid := range []string{pod + `"}`, "app-foreign-abcde12345-abcde"} {
+		if _, err := reader.History(context.Background(), account, app, 24, "", invalid); !errors.Is(err, ErrInvalidHistoryPod) {
+			t.Errorf("invalid pod accepted: %q %v", invalid, err)
+		}
+	}
+	if queries != 1 {
+		t.Fatalf("invalid pod reached Loki: %d queries", queries)
 	}
 }

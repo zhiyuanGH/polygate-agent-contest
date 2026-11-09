@@ -138,6 +138,8 @@ function Overview() {
   const [logsApp, setLogsApp] = useState<AppRecord | null>(null)
   const [selectedLogPod, setSelectedLogPod] = useState('')
   const [historyHours, setHistoryHours] = useState<24 | 168>(24)
+  const [historyPod, setHistoryPod] = useState('')
+  const [knownHistoryPods, setKnownHistoryPods] = useState<string[]>([])
   const appPods = useQuery({ queryKey: ['appPods', logsApp?.id], queryFn: () => api.appPods(logsApp!.id),
     enabled: logsApp !== null && logsApp.status !== 'Stopped',
     refetchInterval: logsApp !== null && logsApp.status !== 'Stopped' ? 5000 : false })
@@ -146,10 +148,20 @@ function Overview() {
     queryFn: () => api.appLogs(logsApp!.id, activeLogPod),
     enabled: logsApp !== null && logsApp.status !== 'Stopped' && (appPods.data?.length ?? 0) > 0,
     refetchInterval: logsApp !== null && logsApp.status !== 'Stopped' ? 5000 : false })
-  const appLogHistory = useInfiniteQuery({ queryKey: ['appLogHistory', logsApp?.id, historyHours],
-    queryFn: ({ pageParam }) => api.appLogHistory(logsApp!.id, historyHours, pageParam),
+  const appLogHistory = useInfiniteQuery({ queryKey: ['appLogHistory', logsApp?.id, historyHours, historyPod],
+    queryFn: ({ pageParam }) => api.appLogHistory(logsApp!.id, historyHours, pageParam, historyPod),
     initialPageParam: '', getNextPageParam: page => page.nextBefore || undefined,
     enabled: logsApp !== null && me.data?.appLogHistoryAvailable === true, refetchOnWindowFocus: false })
+  useEffect(() => { setHistoryPod(''); setKnownHistoryPods([]) }, [logsApp?.id])
+  useEffect(() => {
+    if (!logsApp) return
+    const discovered = [...(appPods.data ?? []).map(pod => pod.name),
+      ...(appLogHistory.data?.pages.flatMap(page => page.items.map(item => item.pod)) ?? [])].filter(Boolean)
+    setKnownHistoryPods(previous => {
+      const next = [...new Set([...previous, ...discovered])].sort()
+      return next.length === previous.length && next.every((pod, index) => pod === previous[index]) ? previous : next
+    })
+  }, [logsApp, appPods.data, appLogHistory.data])
   const appEvents = useQuery({ queryKey: ['appEvents', logsApp?.id], queryFn: () => api.appEvents(logsApp!.id),
     enabled: logsApp !== null, refetchInterval: logsApp !== null ? 5000 : false })
   const appMetrics = useQuery({ queryKey: ['appMetrics', logsApp?.id], queryFn: () => api.appMetrics(logsApp!.id),
@@ -271,8 +283,11 @@ function Overview() {
         {appLogs.isPending && <Spin />}
         {appLogs.data && <><Text type="secondary">Pod: {appLogs.data.pod}</Text><pre style={{ maxHeight: 440, overflow: 'auto', padding: 12, background: '#111827', color: '#f9fafb', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{appLogs.data.data || 'No output yet.'}</pre></>}</>}
       {me.data?.appLogHistoryAvailable && <><Title level={5}>Historical container logs</Title>
-        <Paragraph type="secondary">Up to seven days of logs. Each page shows up to 200 lines; load older pages as needed. Refresh to load new lines.</Paragraph>
+        <Paragraph type="secondary">Up to seven days of logs. Each page shows up to 200 lines; load older pages to discover removed Pods. Select a Pod to filter its history. Refresh to load new lines.</Paragraph>
         <Select aria-label="Historical log range" value={historyHours} onChange={setHistoryHours} options={[{ value: 24, label: 'Last 24 hours' }, { value: 168, label: 'Last 7 days' }]} style={{ width: 160, marginBottom: 12 }} />
+        <Select aria-label="Historical Pod" showSearch optionFilterProp="label" value={historyPod} onChange={setHistoryPod}
+          options={[{ value: '', label: 'All Pods' }, ...knownHistoryPods.map(pod => ({ value: pod, label: pod }))]}
+          style={{ width: 360, maxWidth: '100%', marginBottom: 12, marginLeft: 8 }} />
         {appLogHistory.error && <Alert type="error" showIcon message="Could not load historical logs" description={appLogHistory.error.message} />}
         {appLogHistory.isPending && <Spin />}
         {appLogHistory.data && <><pre style={{ maxHeight: 440, overflow: 'auto', padding: 12, background: '#111827', color: '#f9fafb', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>

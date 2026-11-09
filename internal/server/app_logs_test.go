@@ -87,10 +87,13 @@ func TestAccountActualUsageIsTenantScopedAndMarksMissingSamples(t *testing.T) {
 	}
 }
 
-func (r *fakeAppLogReader) History(_ context.Context, _, _ string, _ int, before string) (applogs.HistoryResult, error) {
+func (r *fakeAppLogReader) History(_ context.Context, _, _ string, _ int, before, pod string) (applogs.HistoryResult, error) {
 	r.calls++
 	if before == "bad" {
 		return applogs.HistoryResult{}, applogs.ErrInvalidHistoryCursor
+	}
+	if pod == "foreign-pod" {
+		return applogs.HistoryResult{}, applogs.ErrInvalidHistoryPod
 	}
 	return applogs.HistoryResult{Items: []applogs.HistoryLine{{Line: "owned history"}}, RangeHours: 24}, nil
 }
@@ -179,5 +182,8 @@ func TestAppLogsRequireOwnedAppBeforeClusterRead(t *testing.T) {
 	}
 	if w := request("student-a", "/history?hours=24&before=bad"); w.Code != http.StatusBadRequest || reader.calls != 7 {
 		t.Fatalf("invalid history cursor accepted: status=%d readerCalls=%d", w.Code, reader.calls)
+	}
+	if w := request("student-a", "/history?hours=24&pod=foreign-pod"); w.Code != http.StatusBadRequest || reader.calls != 8 {
+		t.Fatalf("invalid history pod accepted: status=%d readerCalls=%d", w.Code, reader.calls)
 	}
 }

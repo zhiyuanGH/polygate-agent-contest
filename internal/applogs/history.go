@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,6 +20,9 @@ import (
 
 var ErrHistoryDisabled = errors.New("historical app logs disabled")
 var ErrInvalidHistoryCursor = errors.New("invalid historical log cursor")
+var ErrInvalidHistoryPod = errors.New("invalid historical log pod")
+
+var historyPodSuffix = regexp.MustCompile(`^[a-z0-9]{5,15}-[a-z0-9]{5}$`)
 
 type HistoryLine struct {
 	Timestamp string `json:"timestamp"`
@@ -33,7 +37,7 @@ type HistoryResult struct {
 	NextBefore string        `json:"nextBefore,omitempty"`
 }
 
-func (r *Reader) History(ctx context.Context, accountID, appID string, hours int, before string) (HistoryResult, error) {
+func (r *Reader) History(ctx context.Context, accountID, appID string, hours int, before, pod string) (HistoryResult, error) {
 	if r.lokiURL == "" {
 		return HistoryResult{}, ErrHistoryDisabled
 	}
@@ -45,6 +49,12 @@ func (r *Reader) History(ctx context.Context, accountID, appID string, hours int
 	}
 	if _, err := uuid.Parse(appID); err != nil {
 		return HistoryResult{}, fmt.Errorf("invalid app identifier")
+	}
+	if pod != "" {
+		prefix := "app-" + strings.ReplaceAll(appID, "-", "") + "-"
+		if !strings.HasPrefix(pod, prefix) || !historyPodSuffix.MatchString(strings.TrimPrefix(pod, prefix)) {
+			return HistoryResult{}, ErrInvalidHistoryPod
+		}
 	}
 	endpoint, err := url.Parse(strings.TrimRight(r.lokiURL, "/") + "/loki/api/v1/query_range")
 	if err != nil || endpoint.Scheme != "http" || endpoint.Host == "" {
@@ -60,7 +70,11 @@ func (r *Reader) History(ctx context.Context, accountID, appID string, hours int
 		end = value - 1
 	}
 	query := endpoint.Query()
-	query.Set("query", `{account_id="`+accountID+`",app_id="`+appID+`"}`)
+	selector := `{account_id="` + accountID + `",app_id="` + appID + `"`
+	if pod != "" {
+		selector += `,pod="` + pod + `"`
+	}
+	query.Set("query", selector+`}`)
 	query.Set("start", strconv.FormatInt(now.Add(-time.Duration(hours)*time.Hour).UnixNano(), 10))
 	query.Set("end", strconv.FormatInt(end, 10))
 	query.Set("limit", "200")
@@ -107,7 +121,8 @@ func (r *Reader) History(ctx context.Context, accountID, appID string, hours int
 	}
 	items := make([]entry, 0, 200)
 	for _, stream := range decoded.Data.Result {
-		if stream.Stream["account_id"] != accountID || stream.Stream["app_id"] != appID {
+		if stream.Stream["account_id"] != accountID || stream.Stream["app_id"] != appID ||
+			(pod != "" && stream.Stream["pod"] != pod) {
 			continue
 		}
 		for _, value := range stream.Values {

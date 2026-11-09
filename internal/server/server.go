@@ -697,16 +697,21 @@ func (h *Handler) getAppLogHistory(w http.ResponseWriter, r *http.Request) {
 		hours = value
 	}
 	before := r.URL.Query().Get("before")
+	pod := r.URL.Query().Get("pod")
 	reader, available := h.appLogReader.(interface {
-		History(context.Context, string, string, int, string) (applogs.HistoryResult, error)
+		History(context.Context, string, string, int, string, string) (applogs.HistoryResult, error)
 	})
 	if !available {
 		writeError(w, http.StatusServiceUnavailable, "APP_HISTORY_DISABLED", "Historical logs are unavailable.")
 		return
 	}
-	result, err := reader.History(r.Context(), p.AccountID, appID, hours, before)
+	result, err := reader.History(r.Context(), p.AccountID, appID, hours, before, pod)
 	if errors.Is(err, applogs.ErrInvalidHistoryCursor) {
 		writeError(w, http.StatusBadRequest, "INVALID_LOG_CURSOR", "Refresh the logs and choose an older page again.")
+		return
+	}
+	if errors.Is(err, applogs.ErrInvalidHistoryPod) {
+		writeError(w, http.StatusBadRequest, "INVALID_LOG_POD", "Choose a Pod that belongs to this app.")
 		return
 	}
 	if err != nil {
