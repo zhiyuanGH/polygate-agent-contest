@@ -32,9 +32,9 @@
 
 ZIP 与镜像 tar 均先创建上传会话，再按后端返回的分片大小上传，最后调用 `complete`；当前最大分片为 8 MiB。ZIP 页面限制压缩包 100 MiB，镜像 tar 页面限制 1 GiB。进度条表示客户端已发送的分片，100% 后服务端导入或构建仍可能继续。`My images` 的报告入口调用 `GET /api/v1/images/{id}/scan-report`，下载入口加 `?download=1`；后端检查报告所有者，前端不应缓存报告到浏览器持久存储。
 
-Overview 的 Diagnostics 弹窗先用 `GET /api/v1/apps/{id}/pods` 列出当前 Pod，再以可选 `?pod=` 调用 `/logs`。Pod 列表和当前日志每 5 秒刷新；所选 Pod 若有等待、Pod 状态或上次容器退出原因，会显示在当前日志上方（含上次退出码）。这些状态来自 Kubernetes，不保证已删除 Pod 仍有状态可读；无当前 Pod 时提示查看历史日志与事件。当前日志由 Kubernetes 取最近 200 行，API 从中保留末尾最多 128 KiB，页面将最新行放在顶部；读入最多 4 MiB，超限会明确报错。历史日志走 `/logs/history?hours=24|168&before=<纳秒时间戳>&pod=<Pod 名>`，按新到旧展示 Pod 名和时间；每页最多 200 行、128 KiB，页面可继续加载更早的记录。`Historical Pod` 的候选项来自当前 Pod 和已加载的历史页；选中后由后端按账号、App 和精确 Pod 名筛选，切换条件会重置翻页游标。该选择器不会枚举尚未加载的历史 Pod，也不是完整日志导出。源码 ZIP 的 `View log` 分块读取 `/source/builds/{id}/log?offset=...`，弹窗按构建步骤原始顺序展示并仅保留最新 2 MiB；已清理的构建日志会显示未保留。镜像本身没有运行日志，`My images` 展示扫描状态、已完成扫描的 Trivy 漏洞报告，以及 `Failed` 扫描的错误码、重试次数、最后检查时间和可下载的失败摘要。失败摘要来自持久扫描任务，不包含扫描器原始日志；运行容器日志在 Overview 中查看。
+Overview 的 Diagnostics 弹窗先用 `GET /api/v1/apps/{id}/pods` 列出当前 Pod，再以可选 `?pod=` 调用 `/logs`。Pod 列表和当前日志每 5 秒刷新；所选 Pod 若有等待、Pod 状态或上次容器退出原因，会显示在当前日志上方（含上次退出码）。这些状态来自 Kubernetes，不保证已删除 Pod 仍有状态可读；无当前 Pod 时提示查看历史日志与事件。当前日志由 Kubernetes 取最近 200 行，API 从中保留末尾最多 128 KiB，页面将最新行放在顶部；读入最多 4 MiB，超限会明确报错。历史日志走 `/logs/history?hours=24|168&before=<纳秒时间戳>&pod=<Pod 名>`，按新到旧展示 Pod 名和时间；每页最多 200 行、128 KiB，页面可继续加载更早的记录。`Historical Pod` 的候选项来自当前 Pod 和已加载的历史页；选中后由后端按账号、App 和精确 Pod 名筛选，切换条件会重置翻页游标。该选择器不会枚举尚未加载的历史 Pod，也不是完整日志导出。源码 ZIP 的 `View log` 分块读取 `/source/builds/{id}/log?offset=...`，弹窗将最新一行放在顶部并仅保留最新 2 MiB；已清理的构建日志会显示未保留。镜像本身没有运行日志，`My images` 展示扫描状态、已完成扫描的 Trivy 漏洞报告，以及 `Failed` 扫描的错误码、重试次数、最后检查时间和可下载的失败摘要。失败摘要来自持久扫描任务，不包含扫描器原始日志；运行容器日志在 Overview 中查看。
 
-构建日志弹窗保留构建步骤顺序，默认自动滚动到最新输出；用户手动向上滚动会暂停跟随，滚动到底部或重新打开 **Follow latest output** 可恢复跟随。浏览器测试使用真实完成的构建日志验证打开、暂停和恢复，不修改构建任务。
+构建日志弹窗将最新一行放在顶部，默认跟随最新输出；用户向下滚动会暂停跟随，回到顶部或重新打开 **Follow latest output** 可恢复跟随。浏览器测试使用真实完成的构建日志验证打开、暂停和恢复，不修改构建任务。
 
 当前容器日志支持可选 `?previous=1`。后端先按账号和 App 校验 Pod 归属，再核对 `app` 容器至少重启一次，才向 Kubernetes 请求上一次容器日志；没有前一次输出时返回 `PREVIOUS_LOGS_NOT_FOUND`（404）。Diagnostics 只有在所选 Pod 有重启记录时才启用 **Previous attempt**，切换会使用独立的查询缓存键。已删除 Pod 的旧输出仍从 Historical container logs 查询。
 

@@ -574,7 +574,7 @@ function SourcePage() {
     setLogOffset(log.data.nextOffset)
   }, [log.data, logOffset, selectedBuild])
   useEffect(() => {
-    if (selectedBuild && followLatest && logViewport.current) logViewport.current.scrollTop = logViewport.current.scrollHeight
+    if (selectedBuild && followLatest && logViewport.current) logViewport.current.scrollTop = 0
   }, [selectedBuild, logText, followLatest])
   const showLog = (id: string) => {
     decoder.current = new TextDecoder()
@@ -620,10 +620,10 @@ function SourcePage() {
       {log.error && <Alert type="error" showIcon message="Could not load build log" description={log.error.message} />}
       <pre ref={logViewport} onScroll={event => {
         const viewport = event.currentTarget
-        const nearBottom = viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop < 32
-        if (nearBottom !== followLatest) setFollowLatest(nearBottom)
-      }} style={{ maxHeight: '60vh', overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{logText || (log.isFetching ? 'Loading log...' : log.data?.retained === false && ['Succeeded', 'Failed'].includes(log.data.state) ? 'No build log is retained for this task.' : 'No output yet.')}</pre>
-      <Space><Switch size="small" aria-label="Follow latest build output" checked={followLatest} onChange={setFollowLatest} /><Text type="secondary">Follow latest output. Showing the latest 2 MiB in build order.</Text></Space>
+        const nearTop = viewport.scrollTop < 32
+        if (nearTop !== followLatest) setFollowLatest(nearTop)
+      }} style={{ maxHeight: '60vh', overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{logText ? newestFirstLines(logText) : (log.isFetching ? 'Loading log...' : log.data?.retained === false && ['Succeeded', 'Failed'].includes(log.data.state) ? 'No build log is retained for this task.' : 'No output yet.')}</pre>
+      <Space><Switch size="small" aria-label="Follow latest build output" checked={followLatest} onChange={setFollowLatest} /><Text type="secondary">Follow latest output. Showing the latest 2 MiB, newest line first.</Text></Space>
     </Modal>
   </>
 }
