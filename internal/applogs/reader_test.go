@@ -63,10 +63,10 @@ func TestReaderBoundsLogAndUsesOwnedNamespace(t *testing.T) {
 			return
 		}
 		if r.URL.Path != "/api/v1/namespaces/"+namespace+"/pods/"+name+"/log" ||
-			r.URL.Query().Get("limitBytes") != "131072" || r.URL.Query().Get("tailLines") != "200" {
+			r.URL.Query().Has("limitBytes") || r.URL.Query().Get("tailLines") != "200" {
 			t.Errorf("wrong Pod log request: %s?%s", r.URL.Path, r.URL.RawQuery)
 		}
-		_, _ = w.Write([]byte(strings.Repeat("x", 200000)))
+		_, _ = w.Write([]byte("oldest\n" + strings.Repeat("x", 200000) + "\nnewest\n"))
 	}))
 	defer server.Close()
 	client, err := dynamic.NewForConfig(&rest.Config{Host: server.URL})
@@ -75,7 +75,8 @@ func TestReaderBoundsLogAndUsesOwnedNamespace(t *testing.T) {
 	}
 	reader := &Reader{client: client, http: server.Client(), host: server.URL}
 	result, err := reader.Read(t.Context(), account, app, "")
-	if err != nil || result.Pod != name || len(result.Data) != int(maxLogBytes) {
+	if err != nil || result.Pod != name || len(result.Data) > int(maxLogBytes) ||
+		!strings.Contains(result.Data, "newest\n") || strings.Contains(result.Data, "oldest\n") {
 		t.Fatalf("bounded Pod log read failed: pod=%s bytes=%d err=%v", result.Pod, len(result.Data), err)
 	}
 }

@@ -12,6 +12,11 @@ import HelpPage from './HelpPage'
 
 const { Title, Text, Paragraph } = Typography
 
+function newestFirstLines(log: string): string {
+  const withoutFinalNewline = log.endsWith('\n') ? log.slice(0, -1) : log
+  return withoutFinalNewline.split('\n').reverse().join('\n')
+}
+
 function appAccessURL(base: string, appID: string): string {
   const url = new URL(base)
   url.hostname = `${appID}.${url.hostname}`
@@ -278,7 +283,7 @@ function Overview() {
           { title: 'Memory', dataIndex: 'memoryBytes', key: 'memory', render: (value: number) => `${(value / 1048576).toFixed(1)} MiB` },
           { title: 'Sampled', dataIndex: 'timestamp', key: 'timestamp', render: (value: string) => value ? new Date(value).toLocaleString('en-GB') : 'Unavailable' }]} />}
       {logsApp?.status !== 'Stopped' && <><Title level={5}>Current container logs</Title>
-        <Paragraph type="secondary">Latest 200 lines, up to 128 KiB. Refreshes every five seconds while open.</Paragraph>
+        <Paragraph type="secondary">Latest 200 lines, up to 128 KiB; newest line first. Refreshes every five seconds while open.</Paragraph>
         {appPods.error && <Alert type="error" showIcon message="Could not list application Pods" description={appPods.error.message} />}
         {appPods.isPending && <Spin />}
         {appPods.data && appPods.data.length > 0 && <Select aria-label="Container Pod" value={activeLogPod ?? ''}
@@ -291,9 +296,9 @@ function Overview() {
         {appPods.data?.length === 0 && <Paragraph type="secondary">No current Pod. Check historical logs and recent events below.</Paragraph>}
         {appLogs.error && <Alert type="error" showIcon message="Could not load application logs" description={appLogs.error.message} />}
         {appLogs.isPending && <Spin />}
-        {appLogs.data && <><Text type="secondary">Pod: {appLogs.data.pod}</Text><pre style={{ maxHeight: 440, overflow: 'auto', padding: 12, background: '#111827', color: '#f9fafb', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{appLogs.data.data || 'No output yet.'}</pre></>}</>}
+        {appLogs.data && <><Text type="secondary">Pod: {appLogs.data.pod}</Text><pre style={{ maxHeight: 440, overflow: 'auto', padding: 12, background: '#111827', color: '#f9fafb', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{appLogs.data.data ? newestFirstLines(appLogs.data.data) : 'No output yet.'}</pre></>}</>}
       {me.data?.appLogHistoryAvailable && <><Title level={5}>Historical container logs</Title>
-        <Paragraph type="secondary">Up to seven days of logs. Each page shows up to 200 lines; load older pages to discover removed Pods. Select a Pod to filter its history. Refresh to load new lines.</Paragraph>
+        <Paragraph type="secondary">Up to seven days of logs, newest first. Each page shows up to 200 lines; load older pages to discover removed Pods. Select a Pod to filter its history. Refresh to load new lines.</Paragraph>
         <Select aria-label="Historical log range" value={historyHours} onChange={setHistoryHours} options={[{ value: 24, label: 'Last 24 hours' }, { value: 168, label: 'Last 7 days' }]} style={{ width: 160, marginBottom: 12 }} />
         <Select aria-label="Historical Pod" showSearch optionFilterProp="label" value={historyPod} onChange={setHistoryPod}
           options={[{ value: '', label: 'All Pods' }, ...knownHistoryPods.map(pod => ({ value: pod, label: pod }))]}

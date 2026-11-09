@@ -1,6 +1,7 @@
 package applogs
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -25,6 +26,7 @@ var ErrNoPods = errors.New("no app pods")
 var ErrPodNotFound = errors.New("pod is not part of this app")
 
 const maxLogBytes int64 = 128 << 10
+const maxLogResponseBytes int64 = 4 << 20
 
 type Result struct {
 	Pod  string `json:"pod"`
@@ -82,8 +84,7 @@ func (r *Reader) Read(ctx context.Context, accountID, appID, requestedPod string
 	}
 	endpoint := strings.TrimRight(r.host, "/") + "/api/v1/namespaces/" + namespace +
 		"/pods/" + url.PathEscape(pod.GetName()) + "/log"
-	query := url.Values{"container": {"app"}, "tailLines": {"200"},
-		"limitBytes": {"131072"}, "timestamps": {"true"}}
+	query := url.Values{"container": {"app"}, "tailLines": {"200"}, "timestamps": {"true"}}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"?"+query.Encode(), nil)
 	if err != nil {
 		return Result{}, err
@@ -96,12 +97,18 @@ func (r *Reader) Read(ctx context.Context, accountID, appID, requestedPod string
 	if response.StatusCode != http.StatusOK {
 		return Result{}, fmt.Errorf("pod log request returned HTTP %d", response.StatusCode)
 	}
-	data, err := io.ReadAll(io.LimitReader(response.Body, maxLogBytes+1))
+	data, err := io.ReadAll(io.LimitReader(response.Body, maxLogResponseBytes+1))
 	if err != nil {
 		return Result{}, err
 	}
+	if len(data) > int(maxLogResponseBytes) {
+		return Result{}, fmt.Errorf("pod log response exceeds 4 MiB")
+	}
 	if len(data) > int(maxLogBytes) {
-		data = data[:maxLogBytes]
+		data = data[len(data)-int(maxLogBytes):]
+		if firstNewline := bytes.IndexByte(data, '\n'); firstNewline >= 0 && firstNewline+1 < len(data) {
+			data = data[firstNewline+1:]
+		}
 	}
 	return Result{Pod: pod.GetName(), Data: string(data)}, nil
 }
