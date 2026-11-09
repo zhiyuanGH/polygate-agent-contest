@@ -368,6 +368,14 @@ function NewApp() {
     navigate('/')
   }, onError: (error: Error) => toast.error(error.message) })
   const persistent = Form.useWatch('persistent', form)
+  const newAppName = Form.useWatch('name', form)
+  const readableSegment = /^[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/
+  const publicAppPrefix = me.data?.appAccessRouting === 'path' && me.data.username &&
+    readableSegment.test(me.data.username) && typeof newAppName === 'string' &&
+    readableSegment.test(newAppName) && !newAppName.includes('--')
+    ? `/${me.data.username}/${newAppName}` : null
+  const publicAppURL = publicAppPrefix && me.data?.appAccessBaseURL
+    ? new URL(`${publicAppPrefix}/`, me.data.appAccessBaseURL).toString() : null
   const boundVolumes = new Set(apps.data?.map(item => item.spec.volumeId).filter(Boolean))
   const readyVolumes = volumes.data?.filter(item => item.state === 'Ready' && !boundVolumes.has(item.id)) ?? []
   return <>
@@ -396,6 +404,12 @@ function NewApp() {
           <Select mode="multiple" loading={secrets.isPending} placeholder="Select saved keys" options={(secrets.data ?? []).map(item => ({ value: item.name, label: item.name }))} />
         </Form.Item>}
         {me.data?.secretAvailable && secrets.error && <Alert type="error" showIcon message="Could not load environment secrets" description={secrets.error.message} />}
+        {me.data?.appAccessRouting === 'path' && me.data.username && <Alert type="info" showIcon style={{ marginBottom: 16 }}
+          message="Public URL and base path"
+          description={publicAppURL ? <>
+            <div>After deployment, your app will open at <Text code>{publicAppURL}</Text></div>
+            <div>Configure your Web framework for <Text code>{publicAppPrefix}</Text>, or use relative asset, API and WebSocket URLs. Root paths such as <Text code>/api</Text> bypass this app.</div>
+          </> : <>Enter a valid app name to see its public URL. Your app must support a path prefix under <Text code>/{me.data.username}/&lt;app-name&gt;/</Text>.</>} />}
         <div className="form-section separated"><h3>Resources</h3><p>Memory request equals memory limit in the first release.</p></div>
         <div className="form-grid">
           <Form.Item label={t('cpuRequest')} name={['resources', 'cpuRequestMilli']} rules={[{ required: true }]}><InputNumber min={100} max={2000} step={50} style={{ width: '100%' }} /></Form.Item>
