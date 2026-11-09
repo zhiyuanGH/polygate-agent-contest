@@ -191,6 +191,8 @@ export type ImageArtifact = {
   createdAt: string
 }
 
+export type ImageScanFailure = { artifactId: string; status: 'Failed'; errorCode: string; attempts: number; checkedAt: string; summary: string }
+
 export class ApiError extends Error {
   constructor(public code: string, public field: string | undefined, message: string) {
     super(message)
@@ -262,6 +264,7 @@ export const api = {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled, reason }),
     }),
   images: async () => (await request<{ items: ImageArtifact[] }>('/images')).items,
+  imageScanFailure: (id: string) => request<ImageScanFailure>(`/images/${encodeURIComponent(id)}/scan-failure`),
   inspectImage: (reference: string) => request<ImageArtifact>('/images/inspect', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reference }),
   }),

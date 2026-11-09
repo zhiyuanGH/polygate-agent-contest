@@ -36,6 +36,7 @@ export default function ImagePage() {
   const [archive, setArchive] = useState<File | null>(null)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [reportImage, setReportImage] = useState<ImageArtifact | null>(null)
+  const [failureImage, setFailureImage] = useState<ImageArtifact | null>(null)
   const me = useQuery({ queryKey: ['me'], queryFn: api.me })
   const images = useQuery({
     queryKey: ['images'], queryFn: api.images,
@@ -74,6 +75,8 @@ export default function ImagePage() {
   })
   const report = useMutation({ mutationFn: api.imageScanReport,
     onError: (error: Error) => toast.error(error.message) })
+  const failure = useMutation({ mutationFn: api.imageScanFailure,
+    onError: (error: Error) => toast.error(error.message) })
   const harborReport = report.data?.[harborReportType] as Record<string, unknown> | undefined
   const vulnerabilities = Array.isArray(harborReport?.vulnerabilities)
     ? harborReport.vulnerabilities as Record<string, unknown>[] : []
@@ -89,6 +92,10 @@ export default function ImagePage() {
       {['Approved', 'Rejected'].includes(item.scanStatus) && <>
         <Button size="small" onClick={() => { setReportImage(item); report.mutate(item.id) }}>View report</Button>
         <a href={`/api/v1/images/${encodeURIComponent(item.id)}/scan-report?download=1`}>Download JSON</a>
+      </>}
+      {item.scanStatus === 'Failed' && <>
+        <Button size="small" onClick={() => { setFailureImage(item); failure.mutate(item.id) }}>View failure</Button>
+        <a href={`/api/v1/images/${encodeURIComponent(item.id)}/scan-failure?download=1`}>Download JSON</a>
       </>}
       <Popconfirm title="Remove this image?" description="Images used by an app cannot be removed. Build history will remain, but its image can no longer be deployed."
         okText="Remove" cancelText="Keep" onConfirm={() => remove.mutate(item.id)}>
@@ -129,6 +136,13 @@ export default function ImagePage() {
             { title: 'Installed', dataIndex: 'version', key: 'version', width: 130 },
             { title: 'Fixed in', dataIndex: 'fix_version', key: 'fix_version', width: 130 },
           ]} /> : <pre style={{ maxHeight: '55vh', overflow: 'auto', whiteSpace: 'pre-wrap' }}>{JSON.stringify(report.data, null, 2)}</pre>}
+      </>}
+    </Modal>
+    <Modal title="Inspection failure" open={failureImage !== null} onCancel={() => setFailureImage(null)} footer={failureImage && <a href={`/api/v1/images/${encodeURIComponent(failureImage.id)}/scan-failure?download=1`}>Download failure JSON</a>} width={700}>
+      {failure.isPending ? <Spin /> : failure.error ? <Alert type="error" showIcon message="Could not load inspection failure" description={failure.error.message} /> : failure.data && <>
+        <Alert type="warning" showIcon message="No vulnerability report was produced" description={failure.data.summary} />
+        <Paragraph style={{ marginTop: 16 }}>Error code: <Text code>{failure.data.errorCode}</Text></Paragraph>
+        <Paragraph>Attempts: {failure.data.attempts} · Last checked: {new Date(failure.data.checkedAt).toLocaleString('en-GB')}</Paragraph>
       </>}
     </Modal>
   </>

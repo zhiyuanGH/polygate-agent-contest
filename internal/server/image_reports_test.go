@@ -8,11 +8,45 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 type reportStoreForTest struct {
 	*MemoryStore
 	archived []byte
+}
+
+type failureStoreForTest struct{ *MemoryStore }
+
+func (s *failureStoreForTest) GetImageScanFailure(_ context.Context, account, id string) (ImageScanFailure, error) {
+	if account != "student-a" || id != "11111111-1111-4111-8111-111111111111" {
+		return ImageScanFailure{}, ErrNotFound
+	}
+	return ImageScanFailure{ArtifactID: id, Status: "Failed", ErrorCode: "IMAGE_SCAN_UNAVAILABLE",
+		Attempts: 8, CheckedAt: time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)}, nil
+}
+
+func TestImageScanFailureIsOwnerScopedAndDownloadable(t *testing.T) {
+	h := NewHandler(&failureStoreForTest{MemoryStore: NewMemoryStore()}, func(r *http.Request) (Principal, error) {
+		return Principal{AccountID: r.Header.Get("X-Account"), Subject: r.Header.Get("X-Account")}, nil
+	}).(*Handler)
+	path := "/api/v1/images/11111111-1111-4111-8111-111111111111/scan-failure"
+	request := func(account, suffix string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, path+suffix, nil)
+		r.Header.Set("X-Account", account)
+		h.ServeHTTP(w, r)
+		return w
+	}
+	if w := request("student-b", ""); w.Code != http.StatusNotFound {
+		t.Fatalf("foreign failure leaked: %d %s", w.Code, w.Body.String())
+	}
+	w := request("student-a", "?download=1")
+	if w.Code != http.StatusOK || !strings.Contains(w.Header().Get("Content-Disposition"), "attachment") ||
+		!strings.Contains(w.Body.String(), `"attempts":8`) ||
+		!strings.Contains(w.Body.String(), "Harbor or Trivy") || w.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("owner failure download: %d %s", w.Code, w.Body.String())
+	}
 }
 
 func (s *reportStoreForTest) GetImageScanReportPointer(_ context.Context, account, id string) (ImageScanReportPointer, error) {

@@ -241,6 +241,19 @@ type ImageScanReportStore interface {
 	GetImageScanReportPointer(context.Context, string, string) (ImageScanReportPointer, error)
 }
 
+type ImageScanFailure struct {
+	ArtifactID string    `json:"artifactId"`
+	Status     string    `json:"status"`
+	ErrorCode  string    `json:"errorCode"`
+	Attempts   int       `json:"attempts"`
+	CheckedAt  time.Time `json:"checkedAt"`
+	Summary    string    `json:"summary"`
+}
+
+type ImageScanFailureStore interface {
+	GetImageScanFailure(context.Context, string, string) (ImageScanFailure, error)
+}
+
 type ImageScanReportArchiver interface {
 	ArchiveImageScanReport(context.Context, string, string, string, string, []byte) error
 }

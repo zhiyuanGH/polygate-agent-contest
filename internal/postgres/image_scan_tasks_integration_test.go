@@ -128,6 +128,15 @@ func TestImageScanTasksLeaseRecoveryAndOwnership(t *testing.T) {
 	if !foundFailed {
 		t.Fatal("account image list hid the terminal scan failure")
 	}
+	failure, err := store.GetImageScanFailure(ctx, accountID, claims[1].ArtifactID)
+	if err != nil || failure.Status != "Failed" || failure.ErrorCode != "SOURCE_DENIED" ||
+		failure.Attempts != 1 || failure.CheckedAt.IsZero() {
+		t.Fatalf("failed scan diagnostic missing: %+v %v", failure, err)
+	}
+	foreignID, _ := server.NewID()
+	if _, err := store.GetImageScanFailure(ctx, foreignID, claims[1].ArtifactID); !errors.Is(err, server.ErrNotFound) {
+		t.Fatalf("foreign failure diagnostic leaked: %v", err)
+	}
 	claimed, ok, err := store.ClaimNextImageScan(ctx, "worker-c", time.Minute)
 	if err != nil || !ok || claimed.ArtifactID != claims[0].ArtifactID || claimed.Attempt != 2 {
 		t.Fatalf("retry claim: %+v %v %v", claimed, ok, err)
