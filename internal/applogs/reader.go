@@ -32,10 +32,15 @@ type Result struct {
 }
 
 type PodInfo struct {
-	Name     string `json:"name"`
-	Phase    string `json:"phase"`
-	Ready    bool   `json:"ready"`
-	Restarts int64  `json:"restarts"`
+	Name                  string `json:"name"`
+	Phase                 string `json:"phase"`
+	Ready                 bool   `json:"ready"`
+	Restarts              int64  `json:"restarts"`
+	Reason                string `json:"reason,omitempty"`
+	Message               string `json:"message,omitempty"`
+	WaitingReason         string `json:"waitingReason,omitempty"`
+	LastTerminationReason string `json:"lastTerminationReason,omitempty"`
+	LastExitCode          *int64 `json:"lastExitCode,omitempty"`
 }
 
 type Reader struct {
@@ -114,6 +119,23 @@ func (r *Reader) List(ctx context.Context, accountID, appID string) ([]PodInfo, 
 		phase, _, _ := unstructured.NestedString(pod.Object, "status", "phase")
 		statuses, _, _ := unstructured.NestedSlice(pod.Object, "status", "containerStatuses")
 		item := PodInfo{Name: pod.GetName(), Phase: phase, Ready: len(statuses) > 0}
+		item.Reason, _, _ = unstructured.NestedString(pod.Object, "status", "reason")
+		item.Message, _, _ = unstructured.NestedString(pod.Object, "status", "message")
+		if item.Reason == "" {
+			conditions, _, _ := unstructured.NestedSlice(pod.Object, "status", "conditions")
+			for _, value := range conditions {
+				condition, ok := value.(map[string]any)
+				if !ok || condition["type"] != "PodScheduled" || condition["status"] != "False" {
+					continue
+				}
+				item.Reason, _ = condition["reason"].(string)
+				item.Message, _ = condition["message"].(string)
+				break
+			}
+		}
+		if len(item.Message) > 256 {
+			item.Message = item.Message[:256]
+		}
 		for _, value := range statuses {
 			status, ok := value.(map[string]any)
 			if !ok {
@@ -125,6 +147,21 @@ func (r *Reader) List(ctx context.Context, accountID, appID string) ([]PodInfo, 
 			}
 			if count, ok := status["restartCount"].(int64); ok {
 				item.Restarts += count
+			}
+			if status["name"] == "app" {
+				if state, ok := status["state"].(map[string]any); ok {
+					if waiting, ok := state["waiting"].(map[string]any); ok {
+						item.WaitingReason, _ = waiting["reason"].(string)
+					}
+				}
+				if last, ok := status["lastState"].(map[string]any); ok {
+					if terminated, ok := last["terminated"].(map[string]any); ok {
+						item.LastTerminationReason, _ = terminated["reason"].(string)
+						if code, ok := terminated["exitCode"].(int64); ok {
+							item.LastExitCode = &code
+						}
+					}
+				}
 			}
 		}
 		result = append(result, item)

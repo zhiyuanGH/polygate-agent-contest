@@ -89,8 +89,8 @@ func TestListPodsIsOwnedAndIncludesUnreadyReplica(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"apiVersion":"v1","kind":"PodList","metadata":{"resourceVersion":"1"},"items":[` +
-			`{"apiVersion":"v1","kind":"Pod","metadata":{"name":"ready","labels":{"app.kubernetes.io/managed-by":"polygate","polygate.io/account-id":"` + account + `","polygate.io/app-id":"` + app + `"}},"status":{"phase":"Running","containerStatuses":[{"ready":true,"restartCount":2}]}},` +
-			`{"apiVersion":"v1","kind":"Pod","metadata":{"name":"unready","labels":{"app.kubernetes.io/managed-by":"polygate","polygate.io/account-id":"` + account + `","polygate.io/app-id":"` + app + `"}},"status":{"phase":"Pending"}},` +
+			`{"apiVersion":"v1","kind":"Pod","metadata":{"name":"ready","labels":{"app.kubernetes.io/managed-by":"polygate","polygate.io/account-id":"` + account + `","polygate.io/app-id":"` + app + `"}},"status":{"phase":"Running","containerStatuses":[{"name":"app","ready":true,"restartCount":2,"lastState":{"terminated":{"reason":"OOMKilled","exitCode":137}}}]}},` +
+			`{"apiVersion":"v1","kind":"Pod","metadata":{"name":"unready","labels":{"app.kubernetes.io/managed-by":"polygate","polygate.io/account-id":"` + account + `","polygate.io/app-id":"` + app + `"}},"status":{"phase":"Pending","conditions":[{"type":"PodScheduled","status":"False","reason":"Unschedulable","message":"Insufficient memory"}],"containerStatuses":[{"name":"app","ready":false,"restartCount":0,"state":{"waiting":{"reason":"ImagePullBackOff"}}}]}},` +
 			`{"apiVersion":"v1","kind":"Pod","metadata":{"name":"foreign","labels":{"app.kubernetes.io/managed-by":"polygate","polygate.io/account-id":"other","polygate.io/app-id":"` + app + `"}},"status":{"phase":"Running"}}]}`))
 	}))
 	defer server.Close()
@@ -108,7 +108,10 @@ func TestListPodsIsOwnedAndIncludesUnreadyReplica(t *testing.T) {
 		byName[item.Name] = item
 	}
 	if !byName["ready"].Ready || byName["ready"].Restarts != 2 ||
-		byName["unready"].Ready || byName["unready"].Phase != "Pending" {
+		byName["ready"].LastTerminationReason != "OOMKilled" || byName["ready"].LastExitCode == nil || *byName["ready"].LastExitCode != 137 ||
+		byName["unready"].Ready || byName["unready"].Phase != "Pending" ||
+		byName["unready"].Reason != "Unschedulable" || byName["unready"].Message != "Insufficient memory" ||
+		byName["unready"].WaitingReason != "ImagePullBackOff" {
 		t.Fatalf("Pod status differs: %+v", byName)
 	}
 }

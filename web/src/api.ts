@@ -51,7 +51,7 @@ export type Operation = {
 }
 
 export type AppLog = { pod: string; data: string }
-export type AppPod = { name: string; phase: string; ready: boolean; restarts: number }
+export type AppPod = { name: string; phase: string; ready: boolean; restarts: number; reason?: string; message?: string; waitingReason?: string; lastTerminationReason?: string; lastExitCode?: number }
 export type AppLogHistory = { items: { timestamp: string; pod: string; container: string; line: string }[]; rangeHours: number; nextBefore?: string }
 export type AppEvent = { type: string; reason: string; message: string; object: string; count: number; at: string }
 export type PodMetric = { pod: string; cpuMilli: number; memoryBytes: number; timestamp: string; window: string }

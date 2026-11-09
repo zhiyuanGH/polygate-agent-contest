@@ -144,6 +144,13 @@ function Overview() {
     enabled: logsApp !== null && logsApp.status !== 'Stopped',
     refetchInterval: logsApp !== null && logsApp.status !== 'Stopped' ? 5000 : false })
   const activeLogPod = appPods.data?.some(pod => pod.name === selectedLogPod) ? selectedLogPod : undefined
+  const diagnosticPod = appPods.data?.find(pod => pod.name === activeLogPod) ?? appPods.data?.[0]
+  const podDiagnostic = diagnosticPod ? [
+    diagnosticPod.waitingReason && `Waiting: ${diagnosticPod.waitingReason}`,
+    diagnosticPod.reason && `Pod: ${diagnosticPod.reason}`,
+    diagnosticPod.message,
+    diagnosticPod.lastTerminationReason && `Previous exit: ${diagnosticPod.lastTerminationReason}${diagnosticPod.lastExitCode === undefined ? '' : ` (code ${diagnosticPod.lastExitCode})`}`,
+  ].filter(Boolean).join(' · ') : ''
   const appLogs = useQuery({ queryKey: ['appLogs', logsApp?.id, activeLogPod],
     queryFn: () => api.appLogs(logsApp!.id, activeLogPod),
     enabled: logsApp !== null && logsApp.status !== 'Stopped' && (appPods.data?.length ?? 0) > 0,
@@ -278,6 +285,9 @@ function Overview() {
           onChange={setSelectedLogPod} style={{ width: '100%', marginBottom: 12 }}
           options={[{ value: '', label: 'Latest Pod' }, ...appPods.data.map(pod => ({ value: pod.name,
             label: `${pod.name} · ${pod.ready ? 'Ready' : pod.phase || 'Not ready'} · ${pod.restarts} restarts` }))]} />}
+        {diagnosticPod && podDiagnostic && <Alert type="warning" showIcon style={{ marginBottom: 12 }}
+          message={`${diagnosticPod.name}: ${diagnosticPod.ready ? 'Ready' : diagnosticPod.phase || 'Not ready'}; ${diagnosticPod.restarts} restarts`}
+          description={podDiagnostic} />}
         {appPods.data?.length === 0 && <Paragraph type="secondary">No current Pod. Check historical logs and recent events below.</Paragraph>}
         {appLogs.error && <Alert type="error" showIcon message="Could not load application logs" description={appLogs.error.message} />}
         {appLogs.isPending && <Spin />}
