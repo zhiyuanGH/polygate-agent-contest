@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Progress, Select, Space, Spin, Switch, Table, Typography, message } from 'antd'
 import { NavLink, Route, Routes, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -146,8 +146,9 @@ function Overview() {
     queryFn: () => api.appLogs(logsApp!.id, activeLogPod),
     enabled: logsApp !== null && logsApp.status !== 'Stopped' && (appPods.data?.length ?? 0) > 0,
     refetchInterval: logsApp !== null && logsApp.status !== 'Stopped' ? 5000 : false })
-  const appLogHistory = useQuery({ queryKey: ['appLogHistory', logsApp?.id, historyHours],
-    queryFn: () => api.appLogHistory(logsApp!.id, historyHours),
+  const appLogHistory = useInfiniteQuery({ queryKey: ['appLogHistory', logsApp?.id, historyHours],
+    queryFn: ({ pageParam }) => api.appLogHistory(logsApp!.id, historyHours, pageParam),
+    initialPageParam: '', getNextPageParam: page => page.nextBefore || undefined,
     enabled: logsApp !== null && me.data?.appLogHistoryAvailable === true, refetchOnWindowFocus: false })
   const appEvents = useQuery({ queryKey: ['appEvents', logsApp?.id], queryFn: () => api.appEvents(logsApp!.id),
     enabled: logsApp !== null, refetchInterval: logsApp !== null ? 5000 : false })
@@ -270,13 +271,13 @@ function Overview() {
         {appLogs.isPending && <Spin />}
         {appLogs.data && <><Text type="secondary">Pod: {appLogs.data.pod}</Text><pre style={{ maxHeight: 440, overflow: 'auto', padding: 12, background: '#111827', color: '#f9fafb', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{appLogs.data.data || 'No output yet.'}</pre></>}</>}
       {me.data?.appLogHistoryAvailable && <><Title level={5}>Historical container logs</Title>
-        <Paragraph type="secondary">The latest 200 lines are retained for up to seven days. Refresh to load new lines.</Paragraph>
+        <Paragraph type="secondary">Up to seven days of logs. Each page shows up to 200 lines; load older pages as needed. Refresh to load new lines.</Paragraph>
         <Select aria-label="Historical log range" value={historyHours} onChange={setHistoryHours} options={[{ value: 24, label: 'Last 24 hours' }, { value: 168, label: 'Last 7 days' }]} style={{ width: 160, marginBottom: 12 }} />
         {appLogHistory.error && <Alert type="error" showIcon message="Could not load historical logs" description={appLogHistory.error.message} />}
         {appLogHistory.isPending && <Spin />}
-        {appLogHistory.data && <pre style={{ maxHeight: 440, overflow: 'auto', padding: 12, background: '#111827', color: '#f9fafb', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-          {appLogHistory.data.items.length ? appLogHistory.data.items.map(item => `${item.timestamp} ${item.pod} ${item.line}`).join('\n') : 'No stored logs in this range.'}
-        </pre>}</>}
+        {appLogHistory.data && <><pre style={{ maxHeight: 440, overflow: 'auto', padding: 12, background: '#111827', color: '#f9fafb', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+          {appLogHistory.data.pages.some(page => page.items.length) ? appLogHistory.data.pages.flatMap(page => page.items).map(item => `${item.timestamp} ${item.pod} ${item.line}`).join('\n') : 'No stored logs in this range.'}
+        </pre>{appLogHistory.hasNextPage && <Button onClick={() => void appLogHistory.fetchNextPage()} loading={appLogHistory.isFetchingNextPage}>Load older logs</Button>}</>}</>}
       <Title level={5}>Recent events</Title>
       {appEvents.error && <Alert type="error" showIcon message="Could not load application events" description={appEvents.error.message} />}
       <Table<AppEvent> rowKey={(_, index) => String(index)} size="small" pagination={false} loading={appEvents.isPending}

@@ -32,7 +32,7 @@
 
 ZIP 与镜像 tar 均先创建上传会话，再按后端返回的分片大小上传，最后调用 `complete`；当前最大分片为 8 MiB。ZIP 页面限制压缩包 100 MiB，镜像 tar 页面限制 1 GiB。进度条表示客户端已发送的分片，100% 后服务端导入或构建仍可能继续。`My images` 的报告入口调用 `GET /api/v1/images/{id}/scan-report`，下载入口加 `?download=1`；后端检查报告所有者，前端不应缓存报告到浏览器持久存储。
 
-Overview 的 Diagnostics 弹窗先用 `GET /api/v1/apps/{id}/pods` 列出当前 Pod，再以可选 `?pod=` 调用 `/logs`。Pod 列表和当前日志每 5 秒刷新；无当前 Pod 时提示查看历史日志与事件。历史日志走 `/logs/history?hours=24|168`，展示 Pod 名和时间，但每次最多返回全应用最近 200 行；当前日志最多 200 行、128 KiB。源码 ZIP 的 `View log` 分块读取 `/source/builds/{id}/log?offset=...`，弹窗仅保留最新 2 MiB；已清理的构建日志会显示未保留。镜像本身没有运行日志，`My images` 展示的是扫描状态和已完成扫描的 Trivy 报告；运行容器日志在 Overview 中查看。扫描执行失败时，目前只显示错误码，不提供学生侧扫描器原始日志。
+Overview 的 Diagnostics 弹窗先用 `GET /api/v1/apps/{id}/pods` 列出当前 Pod，再以可选 `?pod=` 调用 `/logs`。Pod 列表和当前日志每 5 秒刷新；无当前 Pod 时提示查看历史日志与事件。历史日志走 `/logs/history?hours=24|168&before=<纳秒时间戳>`，展示 Pod 名和时间；每页最多 200 行、128 KiB，页面可继续加载更早的记录。当前日志最多 200 行、128 KiB。源码 ZIP 的 `View log` 分块读取 `/source/builds/{id}/log?offset=...`，弹窗仅保留最新 2 MiB；已清理的构建日志会显示未保留。镜像本身没有运行日志，`My images` 展示的是扫描状态和已完成扫描的 Trivy 报告；运行容器日志在 Overview 中查看。扫描执行失败时，目前只显示错误码，不提供学生侧扫描器原始日志。
 
 ## 本地开发和验证
 

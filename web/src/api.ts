@@ -52,7 +52,7 @@ export type Operation = {
 
 export type AppLog = { pod: string; data: string }
 export type AppPod = { name: string; phase: string; ready: boolean; restarts: number }
-export type AppLogHistory = { items: { timestamp: string; pod: string; container: string; line: string }[]; rangeHours: number }
+export type AppLogHistory = { items: { timestamp: string; pod: string; container: string; line: string }[]; rangeHours: number; nextBefore?: string }
 export type AppEvent = { type: string; reason: string; message: string; object: string; count: number; at: string }
 export type PodMetric = { pod: string; cpuMilli: number; memoryBytes: number; timestamp: string; window: string }
 export type AccountActualUsage = { cpuMilli: number; memoryBytes: number; sampledPods: number; expectedPods: number; complete: boolean; checkedAt: string }
@@ -336,7 +336,7 @@ export const api = {
   appRevisions: async (id: string) => (await request<{ items: Revision[] }>(`/apps/${encodeURIComponent(id)}/revisions`)).items,
   appPods: async (id: string) => (await request<{ items: AppPod[] }>(`/apps/${encodeURIComponent(id)}/pods`)).items,
   appLogs: (id: string, pod?: string) => request<AppLog>(`/apps/${encodeURIComponent(id)}/logs${pod ? `?pod=${encodeURIComponent(pod)}` : ''}`),
-  appLogHistory: (id: string, hours: 24 | 168) => request<AppLogHistory>(`/apps/${encodeURIComponent(id)}/logs/history?hours=${hours}`),
+  appLogHistory: (id: string, hours: 24 | 168, before = '') => request<AppLogHistory>(`/apps/${encodeURIComponent(id)}/logs/history?hours=${hours}${before ? `&before=${encodeURIComponent(before)}` : ''}`),
   appEvents: async (id: string) => (await request<{ items: AppEvent[] }>(`/apps/${encodeURIComponent(id)}/events`)).items,
   appMetrics: async (id: string) => (await request<{ items: PodMetric[] }>(`/apps/${encodeURIComponent(id)}/metrics`)).items,
   deployApp: (id: string) => request<DeploymentTask>(`/apps/${encodeURIComponent(id)}/deploy`, {
