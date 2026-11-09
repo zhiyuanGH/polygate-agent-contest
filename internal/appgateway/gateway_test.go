@@ -73,6 +73,30 @@ func TestHostAndServiceValidation(t *testing.T) {
 	}
 }
 
+func TestHostRoutesSupportInternalAndPublicCutover(t *testing.T) {
+	routes, err := ParseHostRoutes(testSuffix + ":30444,example.org:443")
+	if err != nil || len(routes) != 2 {
+		t.Fatalf("valid routes rejected: %+v %v", routes, err)
+	}
+	for _, host := range []string{testApp + "." + testSuffix + ":30444", testApp + ".example.org"} {
+		if appID, err := AppIDFromRoutes(host, routes); err != nil || appID != testApp {
+			t.Fatalf("cutover host rejected: %s %s %v", host, appID, err)
+		}
+	}
+	for _, host := range []string{testApp + ".example.org:30444", testApp + "." + testSuffix,
+		"polygate.example.org", "evil." + testApp + ".example.org"} {
+		if _, err := AppIDFromRoutes(host, routes); err == nil {
+			t.Errorf("unexpectedly accepted host %s", host)
+		}
+	}
+	for _, raw := range []string{"", "example.org", "example.org:0", "example.org:65536",
+		"example.org:0443", "example.org:443,example.org:30444", "EXAMPLE.org:443"} {
+		if _, err := ParseHostRoutes(raw); err == nil {
+			t.Errorf("invalid route accepted: %q", raw)
+		}
+	}
+}
+
 type transportFunc func(*http.Request) (*http.Response, error)
 
 func (f transportFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }

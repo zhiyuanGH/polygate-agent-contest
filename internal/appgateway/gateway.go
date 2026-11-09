@@ -122,7 +122,49 @@ type Gateway struct {
 	Resolver   *Resolver
 	Suffixes   []string
 	PublicPort string
+	HostRoutes []HostRoute
 	Transport  http.RoundTripper
+}
+
+type HostRoute struct {
+	Suffix string
+	Port   string
+}
+
+// ParseHostRoutes lets the old NodePort and a new public HTTPS hostname work
+// during a domain cutover. Each suffix has exactly one expected external port.
+func ParseHostRoutes(raw string) ([]HostRoute, error) {
+	parts := strings.Split(raw, ",")
+	if len(parts) < 1 || len(parts) > 8 {
+		return nil, errors.New("expected one to eight app host routes")
+	}
+	routes := make([]HostRoute, 0, len(parts))
+	seen := make(map[string]bool, len(parts))
+	for _, part := range parts {
+		suffix, port, ok := strings.Cut(strings.TrimSpace(part), ":")
+		if !ok || strings.Contains(port, ":") || seen[suffix] {
+			return nil, errors.New("invalid or duplicate app host route")
+		}
+		if _, err := ParseSuffixes(suffix); err != nil {
+			return nil, err
+		}
+		value, err := strconv.Atoi(port)
+		if err != nil || value < 1 || value > 65535 || strconv.Itoa(value) != port {
+			return nil, errors.New("invalid app host route port")
+		}
+		seen[suffix] = true
+		routes = append(routes, HostRoute{Suffix: suffix, Port: port})
+	}
+	return routes, nil
+}
+
+func AppIDFromRoutes(host string, routes []HostRoute) (string, error) {
+	for _, route := range routes {
+		if appID, err := AppIDFromHost(host, route.Port, []string{route.Suffix}); err == nil {
+			return appID, nil
+		}
+	}
+	return "", ErrNotFound
 }
 
 func (g *Gateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -136,6 +178,9 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	appID, err := AppIDFromHost(req.Host, g.PublicPort, g.Suffixes)
+	if len(g.HostRoutes) > 0 {
+		appID, err = AppIDFromRoutes(req.Host, g.HostRoutes)
+	}
 	if err != nil {
 		http.Error(w, "Unknown app host", http.StatusMisdirectedRequest)
 		return

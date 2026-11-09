@@ -20,13 +20,20 @@ func main() {
 		time.Sleep(20 * time.Second)
 		return
 	}
-	suffixes, err := appgateway.ParseSuffixes(os.Getenv("POLYGATE_APP_HOST_SUFFIXES"))
+	var suffixes []string
+	var routes []appgateway.HostRoute
+	var err error
+	port := os.Getenv("POLYGATE_APP_PUBLIC_PORT")
+	if raw := os.Getenv("POLYGATE_APP_HOST_ROUTES"); raw != "" {
+		routes, err = appgateway.ParseHostRoutes(raw)
+	} else {
+		suffixes, err = appgateway.ParseSuffixes(os.Getenv("POLYGATE_APP_HOST_SUFFIXES"))
+		if err == nil && port == "" {
+			log.Fatal("POLYGATE_APP_PUBLIC_PORT is required")
+		}
+	}
 	if err != nil {
 		log.Fatal(err)
-	}
-	port := os.Getenv("POLYGATE_APP_PUBLIC_PORT")
-	if port == "" {
-		log.Fatal("POLYGATE_APP_PUBLIC_PORT is required")
 	}
 	config, err := rest.InClusterConfig()
 	if err != nil {
@@ -52,6 +59,7 @@ func main() {
 			Resolver:   appgateway.NewResolver(client),
 			Suffixes:   suffixes,
 			PublicPort: port,
+			HostRoutes: routes,
 			Transport:  transport,
 		},
 		ReadHeaderTimeout: 10 * time.Second,
