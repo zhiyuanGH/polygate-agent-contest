@@ -138,12 +138,7 @@ func stripPlatformCredentials(req *http.Request) {
 	cookies := req.Cookies()
 	req.Header.Del("Cookie")
 	for _, cookie := range cookies {
-		name := strings.ToLower(cookie.Name)
-		if strings.HasPrefix(name, "__host-polygate-") ||
-			strings.HasPrefix(name, "pg-dev-") ||
-			strings.HasPrefix(name, "keycloak_") ||
-			strings.HasPrefix(name, "kc_") ||
-			name == "auth_session_id" {
+		if platformCookieName(cookie.Name) {
 			continue
 		}
 		req.AddCookie(cookie)
@@ -159,6 +154,42 @@ func stripPlatformCredentials(req *http.Request) {
 			req.Header.Del(name)
 		}
 	}
+}
+
+func platformCookieName(name string) bool {
+	name = strings.ToLower(name)
+	return strings.HasPrefix(name, "__host-polygate-") ||
+		strings.HasPrefix(name, "pg-dev-") ||
+		strings.HasPrefix(name, "keycloak_") ||
+		strings.HasPrefix(name, "kc_") ||
+		name == "auth_session_id"
+}
+
+func stripAppSetCookies(response *http.Response) error {
+	// A student app may set cookies for its own host. Keep platform-reserved
+	// names and parent-domain cookies out of the browser so an app cannot
+	// claim another app's future access session or share a cookie with peers.
+	raw := response.Header.Values("Set-Cookie")
+	response.Header.Del("Set-Cookie")
+	for _, line := range raw {
+		parts := strings.Split(line, ";")
+		name, _, valid := strings.Cut(strings.TrimSpace(parts[0]), "=")
+		if !valid || name == "" || platformCookieName(name) {
+			continue
+		}
+		parentDomain := false
+		for _, attribute := range parts[1:] {
+			key, _, _ := strings.Cut(strings.TrimSpace(attribute), "=")
+			if strings.EqualFold(key, "Domain") {
+				parentDomain = true
+				break
+			}
+		}
+		if !parentDomain {
+			response.Header.Add("Set-Cookie", line)
+		}
+	}
+	return nil
 }
 
 // ParseHostRoutes lets the old NodePort and a new public HTTPS hostname work
@@ -225,8 +256,9 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	proxy := &httputil.ReverseProxy{
-		Transport:     g.Transport,
-		FlushInterval: -1,
+		Transport:      g.Transport,
+		FlushInterval:  -1,
+		ModifyResponse: stripAppSetCookies,
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(target)
 			pr.Out.Host = pr.In.Host

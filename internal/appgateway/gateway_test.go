@@ -182,6 +182,29 @@ func TestGatewayStripsPlatformCredentialsButPreservesAppCookies(t *testing.T) {
 	}
 }
 
+func TestGatewayRejectsReservedAndParentDomainAppCookies(t *testing.T) {
+	resolver := NewResolver(fake.NewSimpleClientset(service()))
+	gateway := &Gateway{Resolver: resolver, Suffixes: []string{testSuffix}, PublicPort: "30444",
+		Transport: transportFunc(func(*http.Request) (*http.Response, error) {
+			header := make(http.Header)
+			header.Add("Set-Cookie", "app-session=ok; Secure; HttpOnly; Path=/")
+			header.Add("Set-Cookie", "__Host-polygate-app-session=forged; Secure; Path=/")
+			header.Add("Set-Cookie", "KEYCLOAK_SESSION=forged; Path=/")
+			header.Add("Set-Cookie", "cross-app=forged; dOmAiN=apps.example.org; Path=/")
+			return &http.Response{StatusCode: 200, Header: header,
+				Body: io.NopCloser(strings.NewReader("ok"))}, nil
+		})}
+	response := httptest.NewRecorder()
+	gateway.ServeHTTP(response, httptest.NewRequest("GET", "https://"+testApp+"."+testSuffix+":30444/", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("gateway returned %d: %s", response.Code, response.Body.String())
+	}
+	cookies := response.Result().Header.Values("Set-Cookie")
+	if len(cookies) != 1 || cookies[0] != "app-session=ok; Secure; HttpOnly; Path=/" {
+		t.Fatalf("student app set reserved or parent-domain cookies: %q", cookies)
+	}
+}
+
 func TestResolverKeepsVerifiedRouteDuringShortAPIOutage(t *testing.T) {
 	client := fake.NewSimpleClientset(service())
 	resolver := NewResolver(client)
