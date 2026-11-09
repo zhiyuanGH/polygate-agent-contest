@@ -43,6 +43,8 @@ async def poly_gate_prefix(request: Request, call_next):
 
 已在真实浏览器验证 `https://apps.polylink.org/student-a/test-agent-1/docs`：OpenAPI 请求为 `/student-a/test-agent-1/openapi.json`，返回 HTTP 200；Swagger 服务器路径包含相同前缀。见[修复后截图](assets/polygate-workshop-readable-docs-fixed.png)。旧 ID 路由和旧内网 hostname 的 `/docs` 也通过。
 
+Help 页的三个可下载 ZIP 也已按本规范更新：Python Mock Agent 用 `fetch('api/chat')`，Node Counter 用 `fetch('api/count')`，Dockerfile Request Inspector 用相对链接 `api/request` 与 `health`。2026-11-10 从线上 Help 页下载的 ZIP 与源码打包结果一致；三份 ZIP 均重新构建、扫描批准、部署，并在 `apps.polylink.org/<username>/<app-name>/` 中分别点击按钮或链接验证交互，测试应用随后清理。这说明**这些示例**已适配，不能推论任意第三方 Web 应用都会自动适配。
+
 ## 其他常见应用
 
 | 应用 | 建议 | 当前承诺范围 |
