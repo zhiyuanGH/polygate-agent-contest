@@ -25,6 +25,7 @@ type App struct {
 }
 
 type Handler struct {
+	mux                *http.ServeMux
 	store              Store
 	authenticate       func(*http.Request) (Principal, error)
 	mode               string
@@ -39,6 +40,21 @@ type Handler struct {
 	adminQuotaEnabled  bool
 	appLogReader       AppLogReader
 	secretCatalog      SecretCatalog
+	imageUploader      func(context.Context, string, string, string) (registry.Image, error)
+	imageUploadSlots   chan struct{}
+	imageReportReader  func(context.Context, string, string, string) ([]byte, error)
+}
+
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) { h.mux.ServeHTTP(w, r) }
+
+// SetImageUploader enables account-scoped docker-save imports before serving.
+func (h *Handler) SetImageUploader(upload func(context.Context, string, string, string) (registry.Image, error)) {
+	h.imageUploader = upload
+	h.imageUploadSlots = make(chan struct{}, 1)
+}
+
+func (h *Handler) SetImageReportReader(read func(context.Context, string, string, string) ([]byte, error)) {
+	h.imageReportReader = read
 }
 
 type AppLogReader interface {
@@ -135,6 +151,7 @@ func newHandler(store Store, authenticate func(*http.Request) (Principal, error)
 	mux.HandleFunc("GET /api/v1/operations", h.listOperations)
 	mux.HandleFunc("GET /api/v1/operations/history", h.listOperationHistory)
 	mux.HandleFunc("GET /api/v1/images", h.listImages)
+	mux.HandleFunc("GET /api/v1/images/{id}/scan-report", h.imageScanReport)
 	mux.HandleFunc("GET /api/v1/secrets", h.listSecrets)
 	mux.HandleFunc("PUT /api/v1/secrets/{name}", h.putSecret)
 	mux.HandleFunc("DELETE /api/v1/secrets/{name}", h.deleteSecret)
@@ -145,6 +162,9 @@ func newHandler(store Store, authenticate func(*http.Request) (Principal, error)
 	mux.HandleFunc("PATCH /api/v1/volumes/{id}", h.expandVolume)
 	mux.HandleFunc("DELETE /api/v1/volumes/{id}", h.deleteVolume)
 	mux.HandleFunc("POST /api/v1/images/inspect", h.inspectImage)
+	mux.HandleFunc("POST /api/v1/images/uploads", h.createImageUpload)
+	mux.HandleFunc("PUT /api/v1/images/uploads/{id}/chunks/{index}", h.putImageUploadChunk)
+	mux.HandleFunc("POST /api/v1/images/uploads/{id}/complete", h.completeImageUpload)
 	mux.HandleFunc("GET /api/v1/apps/{id}", h.getApp)
 	mux.HandleFunc("PATCH /api/v1/apps/{id}/resources", h.updateAppResources)
 	mux.HandleFunc("PATCH /api/v1/apps/{id}/runtime", h.updateAppRuntime)
@@ -165,9 +185,13 @@ func newHandler(store Store, authenticate func(*http.Request) (Principal, error)
 	mux.HandleFunc("DELETE /api/v1/apps/{id}", h.deleteApp)
 	mux.HandleFunc("POST /api/v1/source/validate", h.validateSource)
 	mux.HandleFunc("POST /api/v1/source/builds", h.submitSourceBuild)
+	mux.HandleFunc("POST /api/v1/source/uploads", h.createSourceUpload)
+	mux.HandleFunc("PUT /api/v1/source/uploads/{id}/chunks/{index}", h.putSourceUploadChunk)
+	mux.HandleFunc("POST /api/v1/source/uploads/{id}/complete", h.completeSourceUpload)
 	mux.HandleFunc("GET /api/v1/source/builds", h.listSourceBuilds)
 	mux.HandleFunc("GET /api/v1/source/builds/{id}/log", h.sourceBuildLog)
-	return mux
+	h.mux = mux
+	return h
 }
 
 func (h *Handler) volumeStore(ctx context.Context, w http.ResponseWriter, accountID string) (VolumeStore, bool) {

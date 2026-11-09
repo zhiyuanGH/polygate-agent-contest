@@ -96,6 +96,10 @@ func main() {
 	if err != nil {
 		log.Fatal("build log budget cleanup failed: ", err)
 	}
-	log.Printf("source cleanup: revoked=%d recovered=%d expired=%d orphan_examined=%d orphan_removed=%d orphan_bytes=%d log_orphan_removed=%d log_budget_removed=%d",
-		revoked, recovered, len(ids), stats.Examined, stats.Removed, stats.Bytes, logStats.Removed, budgetStats.Removed)
+	uploadsRemoved, err := source.PruneUploads(root, time.Now())
+	if err != nil {
+		log.Fatal("upload staging cleanup failed: ", err)
+	}
+	log.Printf("source cleanup: revoked=%d recovered=%d expired=%d orphan_examined=%d orphan_removed=%d orphan_bytes=%d log_orphan_removed=%d log_budget_removed=%d upload_staging_removed=%d",
+		revoked, recovered, len(ids), stats.Examined, stats.Removed, stats.Bytes, logStats.Removed, budgetStats.Removed, uploadsRemoved)
 }

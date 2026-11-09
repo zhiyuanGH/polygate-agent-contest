@@ -228,6 +228,17 @@ type ImageArtifactStore interface {
 	ListImageArtifacts(context.Context, string) ([]ImageArtifact, error)
 }
 
+type ImageScanReportPointer struct {
+	HarborReference string
+	ReportID        string
+	ReportSHA256    string
+	ScanStatus      string
+}
+
+type ImageScanReportStore interface {
+	GetImageScanReportPointer(context.Context, string, string) (ImageScanReportPointer, error)
+}
+
 type ImageDeletionStore interface {
 	RequestImageDeletion(context.Context, string, string, string) error
 }

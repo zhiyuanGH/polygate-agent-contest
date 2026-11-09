@@ -15,6 +15,7 @@ import (
 
 	"polygate/internal/applogs"
 	"polygate/internal/auth"
+	"polygate/internal/harbor"
 	"polygate/internal/keycloakadmin"
 	"polygate/internal/kubeobjects"
 	"polygate/internal/postgres"
@@ -172,6 +173,22 @@ func main() {
 			}
 			apiHandler = server.NewHandlerWithImageDeployment(store, identity.Current,
 				trustedDigest, trustedPort, inspect, os.Getenv("POLYGATE_IMAGE_DEPLOY_ENABLED") == "1")
+		}
+		if os.Getenv("POLYGATE_IMAGE_UPLOAD_ENABLED") == "1" {
+			if buildRoot == "" {
+				log.Fatal("Image upload requires the shared source root")
+			}
+			ca, err := os.ReadFile(os.Getenv("POLYGATE_HARBOR_CA_PATH"))
+			if err != nil {
+				log.Fatal("Image upload Harbor CA is unavailable")
+			}
+			client, err := harbor.New(harbor.Config{BaseURL: "https://" + harbor.RegistryHost,
+				Username: "admin", Password: os.Getenv("POLYGATE_HARBOR_ADMIN_PASSWORD"), CACertPEM: ca})
+			if err != nil {
+				log.Fatal("Image upload Harbor connection is invalid")
+			}
+			apiHandler.(*server.Handler).SetImageUploader(client.ImportImageTar)
+			apiHandler.(*server.Handler).SetImageReportReader(client.ReadVulnerabilityReport)
 		}
 		if os.Getenv("POLYGATE_ADMIN_PROVISION_ENABLED") == "1" {
 			manager, err := keycloakadmin.New(os.Getenv("POLYGATE_KEYCLOAK_ADMIN_URL"),

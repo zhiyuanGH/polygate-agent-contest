@@ -264,6 +264,27 @@ export const api = {
   inspectImage: (reference: string) => request<ImageArtifact>('/images/inspect', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reference }),
   }),
+  imageScanReport: (id: string) => request<Record<string, unknown>>(`/images/${encodeURIComponent(id)}/scan-report`),
+  uploadImageTar: async (file: File, onProgress?: (percent: number) => void) => {
+    if (!file.name.toLowerCase().endsWith('.tar') || file.size < 1 || file.size > 1024 * 1024 * 1024) {
+      throw new ApiError('INVALID_IMAGE_UPLOAD', undefined, 'Choose a docker save .tar file of at most 1 GiB.')
+    }
+    const upload = await request<{ id: string; chunkBytes: number }>('/images/uploads', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sizeBytes: file.size }),
+    })
+    if (upload.chunkBytes < 1 || upload.chunkBytes > 8 * 1024 * 1024) {
+      throw new ApiError('INVALID_API_RESPONSE', undefined, 'The upload service returned an invalid chunk size.')
+    }
+    for (let offset = 0, index = 0; offset < file.size; offset += upload.chunkBytes, index++) {
+      const part = file.slice(offset, Math.min(offset + upload.chunkBytes, file.size))
+      await request<{ received: number }>(`/images/uploads/${encodeURIComponent(upload.id)}/chunks/${index}`, {
+        method: 'PUT', body: part,
+      })
+      onProgress?.(Math.round(Math.min(offset + part.size, file.size) / file.size * 100))
+    }
+    return request<ImageArtifact>(`/images/uploads/${encodeURIComponent(upload.id)}/complete`, { method: 'POST' })
+  },
   removeImage: (id: string) => request<{ state: string }>(`/images/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   }),
@@ -344,11 +365,27 @@ export const api = {
   },
   sourceBuilds: async () => (await request<{ builds: SourceBuild[] }>('/source/builds')).builds,
   sourceBuildLog: (id: string, offset: number) => request<SourceBuildLog>(`/source/builds/${encodeURIComponent(id)}/log?offset=${offset}`),
-  submitSourceBuild: (file: File, template: BuildTemplate) => {
-    const form = new FormData()
-    form.append('source', file)
-    form.append('template', template)
-    return request<SourceBuild>('/source/builds', { method: 'POST', body: form })
+  submitSourceBuild: async (file: File, template: BuildTemplate) => {
+    if (file.size <= 8 * 1024 * 1024) {
+      const form = new FormData()
+      form.append('source', file)
+      form.append('template', template)
+      return request<SourceBuild>('/source/builds', { method: 'POST', body: form })
+    }
+    const upload = await request<{ id: string; chunkBytes: number }>('/source/uploads', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sizeBytes: file.size, template }),
+    })
+    if (upload.chunkBytes < 1 || upload.chunkBytes > 8 * 1024 * 1024) {
+      throw new ApiError('INVALID_API_RESPONSE', undefined, 'The upload service returned an invalid chunk size.')
+    }
+    for (let offset = 0, index = 0; offset < file.size; offset += upload.chunkBytes, index++) {
+      const part = file.slice(offset, Math.min(offset + upload.chunkBytes, file.size))
+      await request<{ received: number }>(`/source/uploads/${encodeURIComponent(upload.id)}/chunks/${index}`, {
+        method: 'PUT', body: part,
+      })
+    }
+    return request<SourceBuild>(`/source/uploads/${encodeURIComponent(upload.id)}/complete`, { method: 'POST' })
   },
   deleteApp: (id: string) => request<{ deleted: boolean }>(`/apps/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   logout: async () => {

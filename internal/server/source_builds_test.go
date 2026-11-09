@@ -121,6 +121,60 @@ func TestSourceBuildSubmissionPersistsValidatedZIP(t *testing.T) {
 	}
 }
 
+func TestChunkedSourceBuildSubmission(t *testing.T) {
+	root := t.TempDir()
+	store := &buildStoreForTest{MemoryStore: NewMemoryStore(), root: root, sourceEnabled: true}
+	owner := "student-a"
+	h := NewHandlerWithBuildSubmission(store, func(*http.Request) (Principal, error) {
+		return Principal{AccountID: owner, Subject: owner}, nil
+	}, "", 0, nil, false, root)
+	archive := zipForTest(t, "Dockerfile")
+	create := httptest.NewRequest(http.MethodPost, "/api/v1/source/uploads",
+		bytes.NewBufferString(`{"sizeBytes":`+strconv.Itoa(len(archive))+`,"template":"dockerfile"}`))
+	created := httptest.NewRecorder()
+	h.ServeHTTP(created, create)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", created.Code, created.Body.String())
+	}
+	var upload struct {
+		ID         string `json:"id"`
+		ChunkBytes int64  `json:"chunkBytes"`
+	}
+	if err := json.Unmarshal(created.Body.Bytes(), &upload); err != nil || upload.ID == "" || upload.ChunkBytes != source.UploadChunkBytes {
+		t.Fatalf("upload response: %+v %v", upload, err)
+	}
+	base := "/api/v1/source/uploads/" + upload.ID
+	missing := httptest.NewRecorder()
+	h.ServeHTTP(missing, httptest.NewRequest(http.MethodPost, base+"/complete", nil))
+	if missing.Code != http.StatusConflict || len(store.queued) != 0 {
+		t.Fatalf("missing chunk: %d %s", missing.Code, missing.Body.String())
+	}
+	owner = "student-b"
+	foreign := httptest.NewRecorder()
+	h.ServeHTTP(foreign, httptest.NewRequest(http.MethodPut, base+"/chunks/0", bytes.NewReader(archive)))
+	if foreign.Code != http.StatusNotFound {
+		t.Fatalf("foreign chunk: %d %s", foreign.Code, foreign.Body.String())
+	}
+	owner = "student-a"
+	for i := 0; i < 2; i++ {
+		chunk := httptest.NewRecorder()
+		h.ServeHTTP(chunk, httptest.NewRequest(http.MethodPut, base+"/chunks/0", bytes.NewReader(archive)))
+		if chunk.Code != http.StatusOK {
+			t.Fatalf("chunk retry %d: %d %s", i, chunk.Code, chunk.Body.String())
+		}
+	}
+	complete := httptest.NewRecorder()
+	h.ServeHTTP(complete, httptest.NewRequest(http.MethodPost, base+"/complete", nil))
+	if complete.Code != http.StatusAccepted || len(store.queued) != 1 || store.queued[0].State != "Queued" {
+		t.Fatalf("complete: %d %s", complete.Code, complete.Body.String())
+	}
+	replay := httptest.NewRecorder()
+	h.ServeHTTP(replay, httptest.NewRequest(http.MethodPost, base+"/complete", nil))
+	if replay.Code != http.StatusAccepted || len(store.queued) != 1 {
+		t.Fatalf("replay: %d %s", replay.Code, replay.Body.String())
+	}
+}
+
 func TestSourceBuildPythonTemplateIsPersistedAsDockerfile(t *testing.T) {
 	root := t.TempDir()
 	store := &buildStoreForTest{MemoryStore: NewMemoryStore(), root: root, sourceEnabled: true}
