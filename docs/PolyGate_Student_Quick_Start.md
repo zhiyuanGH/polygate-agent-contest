@@ -1,8 +1,8 @@
-# PolyGate student quick start (internal pilot)
+# PolyGate student quick start
 
 For every click and matching live screenshots, see the [English walkthrough](PolyGate_Student_Walkthrough_EN.md) or [中文图文指南](PolyGate_学生全流程图文指南_ZH.md).
 
-PolyGate currently accepts invited pilot accounts on the laboratory network. Open **https://YOUR-POLYGATE-HOST/** and select **Sign in**. The pilot uses a temporary self-signed certificate; check the IP address before accepting your browser's certificate warning. Keep your account password private. New accounts must choose a new password on first sign-in. For screenshots, see the [illustrated guide](PolyGate_Student_Illustrated_Guide.md).
+PolyGate currently accepts invited pilot accounts. Open **https://polygate.polylink.org/** and select **Sign in**. The public address uses a browser-trusted HTTPS certificate. Keep your password private; new accounts must choose a new password on first sign-in. Follow the illustrated walkthrough linked above for screenshots. If the public address is unavailable, ask the laboratory operator for the internal fallback entry; it uses a self-signed certificate.
 
 ## Deploy a container image
 
@@ -14,6 +14,10 @@ PolyGate currently accepts invited pilot accounts on the laboratory network. Ope
 **App port** is the HTTP server's listening port inside the container, not a browser URL or host port. Your application must listen on `0.0.0.0` at that port. The samples use Python `8000`, Node.js `3000`, and Dockerfile `8080`; your own image may differ. A Dockerfile `EXPOSE` line does not confirm what port the process actually uses. If the app has a health endpoint returning HTTP 2xx or 3xx, enter its path in **HTTP health path**; otherwise leave the field empty to use the default TCP check. The maximum memory setting is **4096 MiB (4 GiB)** per container. Deployment can be refused when your account or the shared cluster capacity is full.
 
 PolyGate runs containers as UID/GID `65532` with a read-only root filesystem, even if the Dockerfile declares another `USER`. Make your code and its parent directories readable by that UID (for example, `RUN chmod -R a+rX /app`); put temporary files in `/tmp` or use a mounted volume. If the Pod starts and then restarts with `PermissionError`, check **Overview → Logs** before changing the app port.
+
+## Public app URL and base path
+
+**Open app** uses `https://apps.polylink.org/<username>/<app-name>/` for a running app. Build browser assets, API calls and navigation with relative URLs, or configure your framework to use this base path. Requests to `/assets`, `/api` or `/openapi.json` at the domain root have no app name and cannot be routed reliably. PolyGate supplies `X-Forwarded-Prefix` to the container for frameworks that support a proxy prefix. See the [base path compatibility guide](PolyGate_学生作品路径适配.md), including a FastAPI example and tested workshop patch. The stable `/<app-id>/` route also remains available.
 
 ## Build from a source ZIP
 
