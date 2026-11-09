@@ -131,6 +131,36 @@ type HostRoute struct {
 	Port   string
 }
 
+func stripPlatformCredentials(req *http.Request) {
+	// Console and Keycloak cookies must never reach student workloads, even
+	// when a client explicitly sends them to an app hostname. Keep unrelated
+	// application cookies so existing student sessions continue to work.
+	cookies := req.Cookies()
+	req.Header.Del("Cookie")
+	for _, cookie := range cookies {
+		name := strings.ToLower(cookie.Name)
+		if strings.HasPrefix(name, "__host-polygate-") ||
+			strings.HasPrefix(name, "pg-dev-") ||
+			strings.HasPrefix(name, "keycloak_") ||
+			strings.HasPrefix(name, "kc_") ||
+			name == "auth_session_id" {
+			continue
+		}
+		req.AddCookie(cookie)
+	}
+	for name := range req.Header {
+		lower := strings.ToLower(name)
+		if strings.HasPrefix(lower, "x-polygate-") ||
+			strings.HasPrefix(lower, "x-authenticated-") ||
+			strings.HasPrefix(lower, "x-remote-") ||
+			strings.HasPrefix(lower, "x-forwarded-user") ||
+			strings.HasPrefix(lower, "x-forwarded-email") ||
+			strings.HasPrefix(lower, "x-forwarded-groups") {
+			req.Header.Del(name)
+		}
+	}
+}
+
 // ParseHostRoutes lets the old NodePort and a new public HTTPS hostname work
 // during a domain cutover. Each suffix has exactly one expected external port.
 func ParseHostRoutes(raw string) ([]HostRoute, error) {
@@ -200,6 +230,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(target)
 			pr.Out.Host = pr.In.Host
+			stripPlatformCredentials(pr.Out)
 			pr.Out.Header.Del("Forwarded")
 			pr.Out.Header.Del("X-Forwarded-For")
 			pr.Out.Header.Del("X-Forwarded-Host")

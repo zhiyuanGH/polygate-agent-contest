@@ -152,6 +152,36 @@ func TestGatewayRoutesOnlyManagedAppAndOverwritesForwardedHeaders(t *testing.T) 
 	}
 }
 
+func TestGatewayStripsPlatformCredentialsButPreservesAppCookies(t *testing.T) {
+	resolver := NewResolver(fake.NewSimpleClientset(service()))
+	gateway := &Gateway{Resolver: resolver, Suffixes: []string{testSuffix}, PublicPort: "30444",
+		Transport: transportFunc(func(req *http.Request) (*http.Response, error) {
+			if got := req.Header.Get("Cookie"); got != "app-session=ok; theme=dark" {
+				t.Errorf("unexpected forwarded cookies: %q", got)
+			}
+			for _, name := range []string{"X-Polygate-Account", "X-Authenticated-User",
+				"X-Remote-User", "X-Forwarded-User", "X-Forwarded-Email"} {
+				if value := req.Header.Get(name); value != "" {
+					t.Errorf("forwarded spoofable identity header %s=%q", name, value)
+				}
+			}
+			return &http.Response{StatusCode: 200, Header: make(http.Header),
+				Body: io.NopCloser(strings.NewReader("ok"))}, nil
+		})}
+	request := httptest.NewRequest("GET", "https://"+testApp+"."+testSuffix+":30444/", nil)
+	request.Header.Set("Cookie", "__Host-polygate-session=secret; __Host-polygate-id-token=id; "+
+		"KEYCLOAK_SESSION=kc; AUTH_SESSION_ID=auth; pg-dev-flow=flow; app-session=ok; theme=dark")
+	for _, name := range []string{"X-Polygate-Account", "X-Authenticated-User",
+		"X-Remote-User", "X-Forwarded-User", "X-Forwarded-Email"} {
+		request.Header.Set(name, "spoofed")
+	}
+	response := httptest.NewRecorder()
+	gateway.ServeHTTP(response, request)
+	if response.Code != 200 {
+		t.Fatalf("gateway returned %d: %s", response.Code, response.Body.String())
+	}
+}
+
 func TestResolverKeepsVerifiedRouteDuringShortAPIOutage(t *testing.T) {
 	client := fake.NewSimpleClientset(service())
 	resolver := NewResolver(client)
