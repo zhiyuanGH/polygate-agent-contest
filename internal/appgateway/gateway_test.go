@@ -83,6 +83,18 @@ func TestHostRoutesSupportInternalAndPublicCutover(t *testing.T) {
 			t.Fatalf("cutover host rejected: %s %s %v", host, appID, err)
 		}
 	}
+	gateway := &Gateway{Resolver: NewResolver(fake.NewSimpleClientset(service())), HostRoutes: routes,
+		Transport: transportFunc(func(*http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: 200, Header: make(http.Header),
+				Body: io.NopCloser(strings.NewReader("cutover-ok"))}, nil
+		})}
+	for _, host := range []string{testApp + "." + testSuffix + ":30444", testApp + ".example.org"} {
+		response := httptest.NewRecorder()
+		gateway.ServeHTTP(response, httptest.NewRequest("GET", "https://"+host+"/", nil))
+		if response.Code != 200 || response.Body.String() != "cutover-ok" {
+			t.Fatalf("gateway did not serve cutover host %s: %d %s", host, response.Code, response.Body.String())
+		}
+	}
 	for _, host := range []string{testApp + ".example.org:30444", testApp + "." + testSuffix,
 		"polygate.example.org", "evil." + testApp + ".example.org"} {
 		if _, err := AppIDFromRoutes(host, routes); err == nil {
