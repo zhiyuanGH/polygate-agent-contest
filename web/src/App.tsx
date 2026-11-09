@@ -552,6 +552,8 @@ function SourcePage() {
   const [selectedBuild, setSelectedBuild] = useState<string | null>(null)
   const [logOffset, setLogOffset] = useState(0)
   const [logText, setLogText] = useState('')
+  const [followLatest, setFollowLatest] = useState(true)
+  const logViewport = useRef<HTMLPreElement>(null)
   const decoder = useRef(new TextDecoder())
   const log = useQuery({ queryKey: ['source-build-log', selectedBuild, logOffset],
     queryFn: () => api.sourceBuildLog(selectedBuild!, logOffset), enabled: buildEnabled && selectedBuild !== null,
@@ -563,10 +565,14 @@ function SourcePage() {
     setLogText(previous => (previous + chunk).slice(-2 * 1024 * 1024))
     setLogOffset(log.data.nextOffset)
   }, [log.data, logOffset, selectedBuild])
+  useEffect(() => {
+    if (selectedBuild && followLatest && logViewport.current) logViewport.current.scrollTop = logViewport.current.scrollHeight
+  }, [selectedBuild, logText, followLatest])
   const showLog = (id: string) => {
     decoder.current = new TextDecoder()
     setLogText('')
     setLogOffset(0)
+    setFollowLatest(true)
     setSelectedBuild(id)
   }
   const columns = [
@@ -604,8 +610,12 @@ function SourcePage() {
     </Card>}
     <Modal title="Build log" open={selectedBuild !== null} onCancel={() => setSelectedBuild(null)} footer={null} width={900}>
       {log.error && <Alert type="error" showIcon message="Could not load build log" description={log.error.message} />}
-      <pre style={{ maxHeight: '60vh', overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{logText || (log.isFetching ? 'Loading log...' : log.data?.retained === false && ['Succeeded', 'Failed'].includes(log.data.state) ? 'No build log is retained for this task.' : 'No output yet.')}</pre>
-      <Text type="secondary">Showing the latest 2 MiB of output. The log updates while the build runs.</Text>
+      <pre ref={logViewport} onScroll={event => {
+        const viewport = event.currentTarget
+        const nearBottom = viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop < 32
+        if (nearBottom !== followLatest) setFollowLatest(nearBottom)
+      }} style={{ maxHeight: '60vh', overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{logText || (log.isFetching ? 'Loading log...' : log.data?.retained === false && ['Succeeded', 'Failed'].includes(log.data.state) ? 'No build log is retained for this task.' : 'No output yet.')}</pre>
+      <Space><Switch size="small" aria-label="Follow latest build output" checked={followLatest} onChange={setFollowLatest} /><Text type="secondary">Follow latest output. Showing the latest 2 MiB in build order.</Text></Space>
     </Modal>
   </>
 }
