@@ -21,7 +21,7 @@ class Handler(BaseHTTPRequestHandler):
                     "max-width:580px;margin:8vh auto;padding:20px;color:#17254b}</style>"
                     "<h1>Request Inspector</h1><p>This Dockerfile-built sample is running.</p>"
                     "<p>Path: <code>" + html.escape(self.path) + "</code></p>"
-                    "<p>Try <a href='/api/request'>/api/request</a> or <a href='/health'>/health</a>.</p></html>").encode()
+                    "<p>Try <a href='api/request'>/api/request</a> or <a href='health'>/health</a>.</p></html>").encode()
             content_type = "text/html; charset=utf-8"
         else:
             self.send_error(404)
