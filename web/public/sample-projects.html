@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang=en><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#8f1329"><link rel="icon" type="image/webp" href="/polyu-logo.webp">
+<title>Sample projects · PolyGate</title><style>
+:root{font:16px/1.65 system-ui,-apple-system,Segoe UI,sans-serif;color:#30252a;background:#fbf8f8}
+*{box-sizing:border-box}body{margin:0}header{background:#4a0d1c;color:white;padding:12px max(22px,calc((100vw - 960px)/2))}
+header a{color:white;text-decoration:none;display:inline-flex;align-items:center;gap:12px;font-weight:700}
+header img{width:35px;height:35px;object-fit:contain;background:white;border-radius:8px;padding:4px}
+main{max-width:960px;margin:30px auto 70px;padding:22px 34px 46px;background:white;border:1px solid #eee5e7;border-radius:12px}
+h1{font-size:2rem;line-height:1.25}h2{margin-top:2.5rem;border-bottom:1px solid #eee5e7;padding-bottom:7px}
+h3{margin-top:2rem;color:#7e172b}a{color:#8f1329}a:hover{text-decoration-thickness:2px}
+img{max-width:100%;height:auto;border:1px solid #eadfe2;border-radius:8px}
+table{display:block;max-width:100%;overflow-x:auto;border-collapse:collapse}th,td{border:1px solid #e7dce0;padding:8px 12px;text-align:left}
+th{background:#f8edf0}code{background:#f6edef;padding:.1em .3em;border-radius:4px;overflow-wrap:anywhere}
+pre{background:#f7f2f3;padding:14px;overflow:auto}pre code{background:none;padding:0}
+@media(max-width:650px){main{margin:0;padding:18px;border:0;border-radius:0}header{padding:10px 18px}h1{font-size:1.6rem}}
+</style></head><body><header><a href="/"><img src="/polyu-logo.webp" alt="PolyU logo">PolyGate · Back to console</a></header>
+<main><h1>PolyGate sample source ZIPs</h1>
+<p>These three small HTTP services are for testing the <strong>Source ZIP</strong> workflow. Each <code>dist/*.zip</code> file has its required files at the archive root. They use no cloud credentials or external API.</p>
+<p>Invited students can download the same three ZIPs directly from the PolyGate <strong>Help</strong> page. <code>package.py</code> also copies the archives into <code>web/public/</code> so the console serves them; the web build and live downloads have been checked against the source archives.</p>
+<p>The full browser steps are in the <a href="/student-guide-en.html">English illustrated walkthrough</a> and <a href="/student-guide-zh.html">Chinese illustrated walkthrough</a>.</p>
+<table>
+<thead>
+<tr>
+<th>ZIP</th>
+<th>Build method</th>
+<th style="text-align: right;">Port</th>
+<th>What to test</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="/mock-agent-python.zip"><code>mock-agent-python.zip</code></a></td>
+<td>Python template</td>
+<td style="text-align: right;">8000</td>
+<td><code>GET /</code>, <code>GET /health</code>, <code>POST /api/chat</code> with <code>{"message":"hello"}</code></td>
+</tr>
+<tr>
+<td><a href="/mock-counter-node.zip"><code>mock-counter-node.zip</code></a></td>
+<td>Node.js template</td>
+<td style="text-align: right;">3000</td>
+<td><code>GET /</code>, <code>GET /health</code>, <code>GET /api/count</code></td>
+</tr>
+<tr>
+<td><a href="/mock-inspector-dockerfile.zip"><code>mock-inspector-dockerfile.zip</code></a></td>
+<td>Use my Dockerfile</td>
+<td style="text-align: right;">8080</td>
+<td><code>GET /</code>, <code>GET /health</code>, <code>GET /api/request</code></td>
+</tr>
+</tbody>
+</table>
+<p>In PolyGate, open <strong>Source ZIP</strong>, choose the matching build method, upload the ZIP, and select <strong>Queue build</strong>. After the build and image scan show success, choose <strong>Create and deploy app</strong> and enter the port above. For the HTTP health path, use <code>/health</code>.</p>
+<p>The Python sample returns a deterministic mock agent reply. The Node sample has an in-memory counter that resets when its container restarts. The Dockerfile sample displays a harmless request summary. None of these samples is a real model agent.</p>
+<p>All three archives were built and deployed on the internal pilot on 9 November 2026. Their home pages and <code>/health</code> endpoints returned HTTP 200 through both worker entry addresses. The temporary test apps were deleted after verification.</p>
+<p>Regenerate the ZIPs after editing source files:</p>
+<pre><code class="language-powershell">python examples/polygate-mock-projects/package.py
+</code></pre></main></body></html>

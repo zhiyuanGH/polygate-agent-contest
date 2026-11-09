@@ -1,0 +1,87 @@
+import { useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Alert, Button, Card, Input, Popconfirm, Space, Spin, Table, Tag, Typography, message } from 'antd'
+import { Link } from 'react-router-dom'
+import { api, type ImageArtifact } from './api'
+
+const { Title, Text, Paragraph } = Typography
+const scanFinished = (item: ImageArtifact) => item.scanStatus !== 'PendingScan'
+const maxAutomaticScanWaitMs = 30 * 60 * 1000
+
+function scanLabel(item: ImageArtifact) {
+  if (item.scanStatus === 'PendingScan') return item.scanTaskState === 'Leased' ? 'Scanning' : 'Queued'
+  return item.scanStatus
+}
+
+function scanDetails(item: ImageArtifact) {
+  if (item.scanStatus === 'Failed') return item.scanErrorCode
+    ? `Inspection failed (${item.scanErrorCode}). This image cannot be deployed.`
+    : 'Inspection failed. This image cannot be deployed.'
+  if (item.scanStatus === 'PendingScan' && Date.now() - new Date(item.createdAt).getTime() >= maxAutomaticScanWaitMs)
+    return 'The check is taking longer than expected. Refresh this list later.'
+  if (!item.scanSummary) return item.scanStatus === 'Rejected'
+    ? 'The image did not meet the current security policy.' : ''
+  const counts = ['Critical', 'High', 'Unknown', 'Medium', 'Low', 'Negligible']
+    .filter(level => (item.scanSummary?.severities[level] ?? 0) > 0)
+    .map(level => `${level}: ${item.scanSummary?.severities[level]}`)
+  const result = counts.length ? counts.join(' · ') : 'No vulnerabilities reported'
+  return item.scanStatus === 'Rejected'
+    ? `${result}. Critical, High or Unknown findings block deployment.`
+    : `${result}. Checked under ${item.scanSummary.policyVersion}.`
+}
+
+export default function ImagePage() {
+  const [reference, setReference] = useState('')
+  const me = useQuery({ queryKey: ['me'], queryFn: api.me })
+  const images = useQuery({
+    queryKey: ['images'], queryFn: api.images,
+    enabled: me.data?.mode === 'authenticated',
+    refetchInterval: query => query.state.data?.some(item => !scanFinished(item) &&
+      Date.now() - new Date(item.createdAt).getTime() < maxAutomaticScanWaitMs) ? 5000 : false,
+  })
+  const query = useQueryClient()
+  const [toast, context] = message.useMessage()
+  const inspect = useMutation({
+    mutationFn: api.inspectImage,
+    onSuccess: async () => {
+      setReference('')
+      await query.invalidateQueries({ queryKey: ['images'] })
+      toast.success('Image queued for security inspection')
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
+  const remove = useMutation({
+    mutationFn: api.removeImage,
+    onSuccess: async () => {
+      await query.invalidateQueries({ queryKey: ['images'] })
+      toast.success('Image removal queued. Registry quota will update after cleanup.')
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
+  const columns = [
+    { title: 'Submitted image', dataIndex: 'submittedReference', key: 'submittedReference', render: (value: string) => <Text className="image-reference" copyable={{ text: value }}>{value}</Text> },
+    { title: 'Security check', key: 'scan', render: (_: unknown, item: ImageArtifact) => <Space direction="vertical" size={2}>
+      <Tag color={item.scanStatus === 'Approved' ? 'green' : item.scanStatus === 'Rejected' || item.scanStatus === 'Failed' ? 'red' : 'blue'}>{scanLabel(item)}</Tag>
+      {scanDetails(item) && <Text type="secondary" className="scan-details">{scanDetails(item)}</Text>}
+    </Space> },
+    { title: 'Pinned digest', dataIndex: 'platformDigest', key: 'platformDigest', render: (value: string) => <Text className="image-digest" copyable={{ text: value }}>{value.slice(-23)}</Text> },
+    { title: 'Submitted', dataIndex: 'createdAt', key: 'createdAt', render: (value: string) => new Date(value).toLocaleString('en-GB') },
+    { title: 'Action', key: 'action', render: (_: unknown, item: ImageArtifact) =>
+      <Popconfirm title="Remove this image?" description="Images used by an app cannot be removed. Build history will remain, but its image can no longer be deployed."
+        okText="Remove" cancelText="Keep" onConfirm={() => remove.mutate(item.id)}>
+        <Button size="small" danger disabled={item.scanStatus === 'PendingScan' || remove.isPending}>Remove</Button>
+      </Popconfirm> },
+  ]
+  return <>
+    {context}
+    <div className="page-heading"><div><span className="eyebrow">CONTAINER IMAGES</span><Title level={2}>My images</Title><Paragraph type="secondary">Submit a public image reference. PolyGate pins it to a digest, copies it to a private registry and checks it before deployment.</Paragraph></div></div>
+    {!me.data?.imageDeploymentAvailable && <Alert type="info" showIcon className="image-access-note" message="Image deployment is not enabled for this account" description="You may inspect images, but only pilot accounts can deploy approved images at this stage." />}
+    {me.data?.mode === 'authenticated' ? <Card className="form-card image-submit-card" title="Inspect an image">
+      <Space.Compact className="image-submit-row"><Input aria-label="Container image reference" value={reference} maxLength={512} placeholder="registry-1.docker.io/library/my-agent:1.0" onChange={event => setReference(event.target.value)} onPressEnter={() => { if (reference.trim()) inspect.mutate(reference.trim()) }} /><Button type="primary" loading={inspect.isPending} disabled={!reference.trim()} onClick={() => inspect.mutate(reference.trim())}>Inspect image</Button></Space.Compact>
+      <Paragraph type="secondary" className="image-help">Use a registry allowed by the platform. Only images marked Approved can be selected for deployment.</Paragraph>
+    </Card> : <Alert type="info" showIcon message="Sign in to inspect images" />}
+    <Card className="apps-card" title="Inspection history" extra={<Space><Button size="small" loading={images.isFetching} onClick={() => void images.refetch()} disabled={me.data?.mode !== 'authenticated'}>Refresh</Button>{me.data?.imageDeploymentAvailable && <Link to="/apps/new">Create an app</Link>}</Space>}>
+      {images.isPending && me.data?.mode === 'authenticated' ? <div className="center"><Spin /></div> : images.error ? <Alert type="error" showIcon message="Could not load images" description={images.error.message} /> : <Table<ImageArtifact> rowKey="id" columns={columns} dataSource={images.data ?? []} pagination={{ pageSize: 10 }} locale={{ emptyText: 'No images submitted yet.' }} />}
+    </Card>
+  </>
+}

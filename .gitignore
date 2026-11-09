@@ -1,0 +1,21 @@
+# Local development and credentials
+.env
+.env.*
+!.env.example
+*.kubeconfig
+*.pem
+*.key
+*secret*.yaml
+*credential*.json
+device_info.txt
+test_account_secrets.txt
+.polygate-*
+
+# Generated files
+web/node_modules/
+web/dist/
+web/*.tsbuildinfo
+__pycache__/
+*.pyc
+*.exe
+*.tar

@@ -1,0 +1,107 @@
+/* PolyGate's student sign-in page uses the same PolyU palette as the app. */
+:root {
+  color-scheme: only light !important;
+}
+
+body,
+body.login-pf,
+.login-pf body {
+  background: #f7f4f4 !important;
+  background-image: none !important;
+  color: #30242a;
+}
+
+#kc-header-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  font-size: 0 !important;
+  text-transform: none;
+}
+
+#kc-header-wrapper::before {
+  content: "";
+  width: 48px;
+  height: 48px;
+  flex: none;
+  border-radius: 11px;
+  background: white url("../img/polyu-logo.webp") center / 42px 42px no-repeat;
+}
+
+#kc-header-wrapper::after {
+  content: "PolyGate";
+  color: #8f1329;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.card-pf {
+  border-top: 4px solid #8f1329 !important;
+  border-radius: 8px;
+  box-shadow: 0 12px 34px rgba(63, 18, 29, .12);
+}
+
+.pf-v5-c-login__main-header {
+  border-top-color: #8f1329 !important;
+}
+
+.pf-v5-c-login__main,
+.pf-v5-c-login__main-header,
+.pf-v5-c-login__main-body {
+  background-color: #fff !important;
+  color: #30242a !important;
+}
+
+.pf-v5-c-form__label,
+.pf-v5-c-form__label-text,
+.pf-v5-c-login__main h1 {
+  color: #30242a !important;
+}
+
+.pf-v5-c-form-control,
+.pf-v5-c-form-control input,
+.pf-v5-c-input-group__item,
+#username,
+#password {
+  background-color: #fff !important;
+  color: #30242a !important;
+}
+
+.pf-v5-c-input-group__item button,
+.pf-v5-c-input-group__item svg {
+  color: #30242a !important;
+  fill: #30242a !important;
+}
+
+.pf-v5-c-input-group__item .pf-v5-c-button,
+.pf-v5-c-button.pf-m-control {
+  background-color: #fff !important;
+  color: #30242a !important;
+  border-color: #ded5d8 !important;
+}
+
+#kc-page-title { color: #30242a; }
+
+.pf-c-button.pf-m-primary,
+.pf-v5-c-button.pf-m-primary,
+#kc-login,
+input[type="submit"] {
+  background: #8f1329 !important;
+  border-color: #8f1329 !important;
+  color: white !important;
+}
+
+.pf-c-button.pf-m-primary:hover,
+.pf-v5-c-button.pf-m-primary:hover,
+#kc-login:hover,
+input[type="submit"]:hover {
+  background: #741021 !important;
+}
+
+a { color: #8f1329; }
+
+input:focus, button:focus-visible, a:focus-visible {
+  outline-color: #8f1329 !important;
+}

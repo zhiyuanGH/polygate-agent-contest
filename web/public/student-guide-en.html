@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang=en><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#8f1329"><link rel="icon" type="image/webp" href="/polyu-logo.webp">
+<title>English student guide · PolyGate</title><style>
+:root{font:16px/1.65 system-ui,-apple-system,Segoe UI,sans-serif;color:#30252a;background:#fbf8f8}
+*{box-sizing:border-box}body{margin:0}header{background:#4a0d1c;color:white;padding:12px max(22px,calc((100vw - 960px)/2))}
+header a{color:white;text-decoration:none;display:inline-flex;align-items:center;gap:12px;font-weight:700}
+header img{width:35px;height:35px;object-fit:contain;background:white;border-radius:8px;padding:4px}
+main{max-width:960px;margin:30px auto 70px;padding:22px 34px 46px;background:white;border:1px solid #eee5e7;border-radius:12px}
+h1{font-size:2rem;line-height:1.25}h2{margin-top:2.5rem;border-bottom:1px solid #eee5e7;padding-bottom:7px}
+h3{margin-top:2rem;color:#7e172b}a{color:#8f1329}a:hover{text-decoration-thickness:2px}
+img{max-width:100%;height:auto;border:1px solid #eadfe2;border-radius:8px}
+table{display:block;max-width:100%;overflow-x:auto;border-collapse:collapse}th,td{border:1px solid #e7dce0;padding:8px 12px;text-align:left}
+th{background:#f8edf0}code{background:#f6edef;padding:.1em .3em;border-radius:4px;overflow-wrap:anywhere}
+pre{background:#f7f2f3;padding:14px;overflow:auto}pre code{background:none;padding:0}
+@media(max-width:650px){main{margin:0;padding:18px;border:0;border-radius:0}header{padding:10px 18px}h1{font-size:1.6rem}}
+</style></head><body><header><a href="/"><img src="/polyu-logo.webp" alt="PolyU logo">PolyGate · Back to console</a></header>
+<main><h1>PolyGate student walkthrough (English)</h1>
+<p><a href="/student-guide-zh.html">中文版</a> · <a href="/sample-projects.html">Sample source code</a></p>
+<p>This guide follows a real <strong>Python ZIP → build → approved image → running app → stop → delete</strong> browser session. The screenshots were captured from the live laboratory pilot on 9 November 2026 at 1366 × 768. Sample app names and dates in your account will differ. The platform interface is in English. No cloud model API key is needed for this walkthrough.</p>
+<h2>Before you start</h2>
+<ul>
+<li>Connect to the laboratory network and use a current desktop browser. Open <strong><a href="https://YOUR-POLYGATE-HOST/">https://YOUR-POLYGATE-HOST/</a></strong>.</li>
+<li>Have the username and initial password supplied by the laboratory operator. Do not use someone else's account.</li>
+<li>The pilot certificate is self-signed. Confirm that the browser address is exactly <code>YOUR-POLYGATE-HOST</code> before accepting its certificate warning.</li>
+<li>A new account may first be asked to change its temporary password. Finish that Keycloak screen, then continue to the workspace. The screenshots below use an account whose password was already changed.</li>
+<li>The sign-in form stays in the readable PolyGate light palette even when your browser uses dark mode.</li>
+</ul>
+<h2>Follow the complete ZIP workflow</h2>
+<h3>Step 1 — Open PolyGate and sign in</h3>
+<p>You should see <strong>Welcome to PolyGate</strong>. Select <strong>Sign in</strong>. On the next page, fill <strong>Username</strong> and <strong>Password</strong>, then select <strong>Sign In</strong>. If the browser returns to a sign-in form, check the credentials or ask the operator to reset your password.</p>
+<p><img alt="PolyGate welcome screen" src="/guide-01-sign-in.png" /></p>
+<p><img alt="Keycloak username and password form" src="/guide-10-keycloak-login.png" /></p>
+<h3>Step 2 — Check the workspace</h3>
+<p>The <strong>Overview</strong> page says <strong>Your workspace</strong> and shows your configured resource quota. A draft or stopped app also counts toward that configured quota. The left navigation contains <strong>Help</strong>, <strong>Source ZIP</strong>, <strong>My images</strong>, <strong>Volumes</strong>, and other pages. Your account may allow at most two apps; the exact remaining amount is shown on your own screen.</p>
+<p><img alt="Overview after signing in" src="/guide-02-overview.png" /></p>
+<h3>Step 3 — Download a sample ZIP</h3>
+<p>Select <strong>Help</strong> in the left navigation. Under <strong>Download a sample project</strong>, select <strong>Mock Agent (Python ZIP)</strong>. The browser downloads <code>mock-agent-python.zip</code>. Keep the ZIP intact; do not extract it before uploading. The other two examples are a Node.js counter and a Dockerfile based request inspector. Their build methods and ports are listed on the same Help card.</p>
+<p><img alt="Sample ZIP downloads on Help" src="/guide-09-sample-downloads.png" /></p>
+<h3>Step 4 — Choose the matching build method</h3>
+<p>Select <strong>Source ZIP</strong> in the left navigation. In <strong>Build method</strong>, choose <strong>Python template</strong>. This example listens on <code>0.0.0.0:8000</code>; the <code>main.py</code> file is at the ZIP root. For the other examples, follow the build method and port table near the end of this guide.</p>
+<p><img alt="Python template selected" src="/guide-11-select-python.png" /></p>
+<h3>Step 5 — Select and submit the ZIP</h3>
+<p>Select <strong>Browse ZIP...</strong>, choose the downloaded <code>mock-agent-python.zip</code>, and check that <strong>Selected: mock-agent-python.zip</strong> appears. Select <strong>Queue build</strong> once. The button accepts ZIPs up to 100 MiB compressed and 1 GiB expanded. Do not reload the page while the upload is being submitted.</p>
+<p><img alt="The selected ZIP and Queue build button" src="/guide-12-zip-selected.png" /></p>
+<h3>Step 6 — Watch the build</h3>
+<p>In <strong>Build history</strong>, the newest row starts at <strong>Queued</strong>, may show <strong>Building</strong>, and should become <strong>Succeeded</strong>. The page refreshes automatically; <strong>Refresh</strong> is available if needed. The screenshot also shows older test rows: use the newest row and its submission time, rather than an older successful build.</p>
+<p><img alt="New build queued in Build history" src="/guide-13-build-queued.png" /></p>
+<p>Select <strong>View log</strong> on that row to read the build output. If the build fails, the log is the first place to look. A successful build is followed by an image security scan; wait until the result shows <strong>Create and deploy app</strong>. If it only says <strong>View image and security scan</strong>, open <strong>My images</strong> and wait for <strong>Approved</strong>. A rejected image cannot be deployed.</p>
+<p><img alt="Build log dialog" src="/guide-15-build-log.png" /></p>
+<p><img alt="Succeeded build with Create and deploy app" src="/guide-14-build-approved.png" /></p>
+<h3>Step 7 — Configure and deploy the app</h3>
+<p>Select <strong>Create and deploy app</strong> on your successful build row. The next page says <strong>Approved build selected</strong>. Fill a unique lowercase <strong>App name</strong>, for example <code>my-mock-agent</code>. Leave the selected image reference as supplied by PolyGate. Set <strong>App port</strong> to <code>8000</code> and <strong>HTTP health path</strong> to <code>/health</code>.</p>
+<p><img alt="App name, selected image, port and health path" src="/guide-16-create-app-form.png" /></p>
+<p>For a first test, leave <strong>CPU request</strong> at <code>250 m</code>, <strong>CPU limit</strong> at <code>1000 m</code>, <strong>Memory</strong> at <code>1024 MiB</code>, <strong>Replicas</strong> at <code>1</code>, and <strong>Use persistent storage</strong> off. Scroll within the main workspace to reach <strong>Create and deploy</strong>, then select it once. PolyGate creates the draft and queues deployment. The maximum memory choice per container is 4096 MiB (4 GiB), but your account and shared cluster also have quotas.</p>
+<p><img alt="Resource fields and Create and deploy button" src="/guide-16b-create-app-resources.png" /></p>
+<h3>Step 8 — Wait for Running and open the app</h3>
+<p>PolyGate returns to <strong>Overview</strong>. Scroll the main workspace to <strong>Applications</strong>. The new row moves through deployment states and should reach <strong>Running</strong>. Select <strong>Open app</strong> in that row. On the sample page, select <strong>Ask agent</strong>; a local mock reply appears. This example uses no cloud model API and consumes no model tokens.</p>
+<p><img alt="Running app and its actions" src="/guide-17-app-running.png" /></p>
+<p><img alt="Sample app returning a mock reply" src="/guide-18-open-app.png" /></p>
+<h3>Step 9 — Check logs and resource usage</h3>
+<p>Back on <strong>Overview</strong>, select <strong>Logs</strong> in the same app row. <strong>Diagnostics</strong> shows recent CPU and memory samples, current container logs, historical logs and events. The sample's <code>/health</code> requests appear in the current log. Close the dialog with the <strong>×</strong> in its upper right corner. If an app is not Running, check this dialog and the status before changing its configuration.</p>
+<p><img alt="Diagnostics and current container logs" src="/guide-19-app-logs.png" /></p>
+<h3>Step 10 — Stop the test app</h3>
+<p>Select <strong>Stop</strong> on the app row. Check the confirmation text, then select <strong>Stop</strong> again in the small confirmation box. Wait for the row to show <strong>Stopped</strong>; cleanup of the Pod can take a short time. Stopping releases running capacity but keeps the app draft. For an app with a volume, stopping also keeps its volume and files.</p>
+<p><img alt="Stop confirmation" src="/guide-20-stop-confirmation.png" /></p>
+<p><img alt="Stopped app row" src="/guide-21-app-stopped.png" /></p>
+<h3>Step 11 — Delete the app and remove its test image</h3>
+<p>Select <strong>Delete</strong> on the stopped app row, then <strong>Delete</strong> in the confirmation box. The app row disappears. If you also want to release the built image, open <strong>My images</strong>, find the image from this build, select <strong>Remove</strong>, and confirm <strong>Remove</strong>. Build history remains as a record, but the removed image can no longer be deployed. Never remove an image still used by an app.</p>
+<p><img alt="Delete confirmation" src="/guide-22-delete-confirmation.png" /></p>
+<h3>Step 12 — Sign out</h3>
+<p>Select <strong>Sign out</strong> in the lower left. You should return to <strong>Welcome to PolyGate</strong> with a <strong>Sign in</strong> button. Signing out does not stop an app you chose to keep running.</p>
+<p><img alt="Signed-out screen" src="/guide-07-signed-out.png" /></p>
+<h2>Use another sample or your own code</h2>
+<table>
+<thead>
+<tr>
+<th>Help download</th>
+<th>Source ZIP build method</th>
+<th style="text-align: right;">App port</th>
+<th>Health path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mock-agent-python.zip</code></td>
+<td>Python template</td>
+<td style="text-align: right;">8000</td>
+<td><code>/health</code></td>
+</tr>
+<tr>
+<td><code>mock-counter-node.zip</code></td>
+<td>Node.js template</td>
+<td style="text-align: right;">3000</td>
+<td><code>/health</code></td>
+</tr>
+<tr>
+<td><code>mock-inspector-dockerfile.zip</code></td>
+<td>Use my Dockerfile</td>
+<td style="text-align: right;">8080</td>
+<td><code>/health</code></td>
+</tr>
+</tbody>
+</table>
+<p>For your own ZIP, place <code>main.py</code> at the root for the Python template, <code>package.json</code> and <code>package-lock.json</code> at the root for the Node.js template, or a <code>Dockerfile</code> at the root for <strong>Use my Dockerfile</strong>. Your process must listen on <code>0.0.0.0</code> at the app port you enter. Only set a health path if it returns HTTP 2xx or 3xx while your app is healthy.</p>
+<p>To use a <strong>prebuilt image</strong> instead, open <strong>My images</strong>, submit its public image reference with <strong>Inspect image</strong>, and wait for <strong>Approved</strong>. Open <strong>New app</strong>, save a draft with the image's actual port and resources, then on <strong>Overview</strong> choose <strong>Deploy image</strong> and select the approved image. For persistent files, first request a volume on <strong>Volumes</strong> and wait for <strong>Ready</strong>; then enable <strong>Use persistent storage</strong> in the app form and select that unused volume. A volume is limited to one app at a time and one running replica. The pilot has one online volume copy, so keep your own backup of important files.</p>
+<p><img alt="My images page" src="/guide-03-my-images.png" /></p>
+<p><img alt="Volumes page" src="/guide-06-volumes.png" /></p>
+<p>If a step fails, note the app name, build submission time and visible error, then check <strong>Build history → View log</strong> or <strong>Overview → Logs</strong>. Contact the laboratory operator with those details. Do not send passwords or API keys in screenshots or logs.</p>
+<p>If the ZIP build succeeds but the app becomes <strong>Failed</strong> with <code>connection refused</code> events, check <strong>App port</strong>. The Python template uses <strong>8000</strong>, Node.js uses <strong>3000</strong>, and the Dockerfile sample uses <strong>8080</strong>. On <strong>Overview</strong>, choose <strong>Edit port</strong> for the failed app, enter the correct listening port, save, then choose <strong>Deploy image</strong> and select the same approved image. Leave the HTTP health path empty unless your app serves that path successfully. This keeps the app and its build history; you do not need to upload the ZIP again.</p></main></body></html>
