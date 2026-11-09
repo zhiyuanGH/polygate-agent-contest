@@ -74,7 +74,7 @@ func Tenant(accountID string, quota domain.Quota) (List, error) {
 		"policyTypes": []string{"Ingress"}, "ingress": []Object{{"from": []Object{{
 			"namespaceSelector": Object{"matchLabels": Object{"kubernetes.io/metadata.name": "polygate-system"}},
 			"podSelector":       Object{"matchLabels": Object{"app": "polygate-app-gateway"}},
-		}}}}}
+		}}, "ports": []Object{{"protocol": "TCP", "port": "http"}}}}}
 	objects := []Object{
 		{"apiVersion": "v1", "kind": "Namespace", "metadata": Object{"name": ns, "labels": labels}},
 		{"apiVersion": "v1", "kind": "ResourceQuota", "metadata": metadata("account-budget"), "spec": Object{"hard": Object{

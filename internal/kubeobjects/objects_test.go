@@ -41,11 +41,17 @@ func TestTenantIsolationAndLeastPrivilege(t *testing.T) {
 			foundGatewayPolicy = true
 			spec := obj["spec"].(Object)
 			selector := spec["podSelector"].(Object)["matchLabels"].(Object)
-			from := spec["ingress"].([]Object)[0]["from"].([]Object)[0]
+			ingress := spec["ingress"].([]Object)
+			if len(ingress) != 1 {
+				t.Fatalf("app gateway policy must have one ingress rule: %+v", ingress)
+			}
+			from := ingress[0]["from"].([]Object)[0]
+			ports := ingress[0]["ports"].([]Object)
 			namespace := from["namespaceSelector"].(Object)["matchLabels"].(Object)
 			pod := from["podSelector"].(Object)["matchLabels"].(Object)
 			if selector["app.kubernetes.io/managed-by"] != "polygate" ||
-				namespace["kubernetes.io/metadata.name"] != "polygate-system" || pod["app"] != "polygate-app-gateway" {
+				namespace["kubernetes.io/metadata.name"] != "polygate-system" || pod["app"] != "polygate-app-gateway" ||
+				len(ports) != 1 || ports[0]["protocol"] != "TCP" || ports[0]["port"] != "http" {
 				t.Fatal("app gateway ingress policy has unexpected selectors")
 			}
 		}
