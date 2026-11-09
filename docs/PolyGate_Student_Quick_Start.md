@@ -13,6 +13,8 @@ PolyGate currently accepts invited pilot accounts on the laboratory network. Ope
 
 **App port** is the HTTP server's listening port inside the container, not a browser URL or host port. Your application must listen on `0.0.0.0` at that port. The samples use Python `8000`, Node.js `3000`, and Dockerfile `8080`; your own image may differ. A Dockerfile `EXPOSE` line does not confirm what port the process actually uses. If the app has a health endpoint returning HTTP 2xx or 3xx, enter its path in **HTTP health path**; otherwise leave the field empty to use the default TCP check. The maximum memory setting is **4096 MiB (4 GiB)** per container. Deployment can be refused when your account or the shared cluster capacity is full.
 
+PolyGate runs containers as UID/GID `65532` with a read-only root filesystem, even if the Dockerfile declares another `USER`. Make your code and its parent directories readable by that UID (for example, `RUN chmod -R a+rX /app`); put temporary files in `/tmp` or use a mounted volume. If the Pod starts and then restarts with `PermissionError`, check **Overview → Logs** before changing the app port.
+
 ## Build from a source ZIP
 
 For a first test, open **Help** and download one of the three sample ZIPs. The page lists its build method and app port; no cloud API key is needed.

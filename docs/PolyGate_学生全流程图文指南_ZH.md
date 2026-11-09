@@ -123,3 +123,5 @@
 若任一步失败，记下应用名、提交时间和页面错误，到 **Build history → View log** 或 **Overview → Logs** 查看，再把这些信息交给实验室管理员。不要把密码或 API Key 放进截图、源码或日志。
 
 如果 ZIP 构建成功，但应用显示 **Failed**，事件里有 `connection refused`，先核对 **App port**：Python 模板是 **8000**，Node.js 模板是 **3000**，Dockerfile 示例是 **8080**。在 **Overview** 找到失败应用，点击 **Edit port**，填入程序实际监听的端口并保存；随后点击 **Deploy image**，选择同一张已批准镜像重新部署。除非应用确实提供对应接口，否则 HTTP 健康检查路径先留空。这样可以保留原应用和构建记录，不必重新上传 ZIP。
+
+如果 **Logs** 显示 Python 导入代码时发生 `PermissionError`，端口可能本来就是正确的。PolyGate 固定用 UID/GID `65532` 运行容器，并把根文件系统设为只读；Dockerfile 中的 `USER` 不会覆盖平台设置。应让该 UID 能读取代码和父目录（例如在 Dockerfile 加 `RUN chmod -R a+rX /app`），临时文件写到 `/tmp`，持久数据写到挂载卷。修正镜像后，在原先失败的应用上重新选择 **Deploy image**。
