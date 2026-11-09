@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -13,6 +14,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"polygate/internal/appgateway"
+	"polygate/internal/postgres"
 )
 
 func main() {
@@ -23,6 +25,7 @@ func main() {
 	var suffixes []string
 	var routes []appgateway.HostRoute
 	var pathRoutes []appgateway.PathRoute
+	var privateRoutes []appgateway.HostRoute
 	var err error
 	port := os.Getenv("POLYGATE_APP_PUBLIC_PORT")
 	if raw := os.Getenv("POLYGATE_APP_HOST_ROUTES"); raw != "" {
@@ -42,6 +45,18 @@ func main() {
 			log.Fatal(err)
 		}
 	}
+	consoleOrigin := os.Getenv("POLYGATE_CONSOLE_ORIGIN")
+	if raw := os.Getenv("POLYGATE_APP_PRIVATE_HOST_ROUTES"); raw != "" {
+		privateRoutes, err = appgateway.ParseHostRoutes(raw)
+		if err != nil {
+			log.Fatal(err)
+		}
+		parsed, parseErr := url.Parse(consoleOrigin)
+		if parseErr != nil || parsed.Scheme != "https" || parsed.Host == "" ||
+			parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+			log.Fatal("private app routes require a valid HTTPS console origin")
+		}
+	}
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		log.Fatal(err)
@@ -52,6 +67,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	dbContext, cancelDB := context.WithTimeout(context.Background(), 15*time.Second)
+	store, err := postgres.Open(dbContext, postgres.DatabaseURLFromEnvironment())
+	cancelDB()
+	if err != nil {
+		log.Fatal("app access database unavailable: ", err)
+	}
+	defer store.Close()
 	transport := &http.Transport{
 		Proxy:                 nil,
 		DialContext:           (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
@@ -60,16 +82,32 @@ func main() {
 		IdleConnTimeout:       90 * time.Second,
 		ResponseHeaderTimeout: 60 * time.Second,
 	}
+	gateway := &appgateway.Gateway{
+		Resolver:          appgateway.NewResolver(client),
+		Access:            store,
+		PrivateAccess:     store,
+		Suffixes:          suffixes,
+		PublicPort:        port,
+		HostRoutes:        routes,
+		PathRoutes:        pathRoutes,
+		PrivateHostRoutes: privateRoutes,
+		ConsoleOrigin:     consoleOrigin,
+		Transport:         transport,
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		if err := store.Pool.Ping(ctx); err != nil {
+			http.Error(w, "app access database unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.Handle("/", gateway)
 	server := &http.Server{
-		Addr: ":8443",
-		Handler: &appgateway.Gateway{
-			Resolver:   appgateway.NewResolver(client),
-			Suffixes:   suffixes,
-			PublicPort: port,
-			HostRoutes: routes,
-			PathRoutes: pathRoutes,
-			Transport:  transport,
-		},
+		Addr:              ":8443",
+		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 		MaxHeaderBytes:    1 << 20,

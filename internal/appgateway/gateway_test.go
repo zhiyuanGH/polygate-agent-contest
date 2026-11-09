@@ -18,11 +18,38 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
+	"polygate/internal/server"
 )
 
 const testApp = "11111111-2222-3333-4444-555555555555"
 const testAccount = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 const testSuffix = "apps.192.0.2.45.sslip.io"
+
+type publicAccessFunc func(context.Context, string) (bool, error)
+
+func (f publicAccessFunc) PublicAppAllowed(ctx context.Context, appID string) (bool, error) {
+	return f(ctx, appID)
+}
+
+var allowPublic publicAccessFunc = func(_ context.Context, _ string) (bool, error) { return true, nil }
+
+type privateAccessFake struct {
+	mode    bool
+	modeErr error
+}
+
+func (f privateAccessFake) PrivateAppAllowed(_ context.Context, _ string) (bool, error) {
+	return f.mode, f.modeErr
+}
+func (f privateAccessFake) AppAccessSessionAllowed(_ context.Context, _ string, token string) (bool, error) {
+	return token == "session-token", nil
+}
+func (f privateAccessFake) ConsumeAppAccessTicket(_ context.Context, _ string, ticket string) (string, string, error) {
+	if ticket != "one-time-ticket" {
+		return "", "", server.ErrForbidden
+	}
+	return "session-token", "/docs", nil
+}
 
 func service() *corev1.Service {
 	return &corev1.Service{
@@ -51,7 +78,7 @@ func TestReadableAliasUsesManagedServiceAndKeepsIDRoute(t *testing.T) {
 		t.Fatal(err)
 	}
 	var gotPath, gotPrefix string
-	gateway := &Gateway{Resolver: NewResolver(fake.NewSimpleClientset(managed)), PathRoutes: paths,
+	gateway := &Gateway{Resolver: NewResolver(fake.NewSimpleClientset(managed)), Access: allowPublic, PathRoutes: paths,
 		Transport: transportFunc(func(req *http.Request) (*http.Response, error) {
 			gotPath, gotPrefix = req.URL.RequestURI(), req.Header.Get("X-Forwarded-Prefix")
 			return &http.Response{StatusCode: 200, Header: make(http.Header),
@@ -79,6 +106,147 @@ func TestReadableAliasUsesManagedServiceAndKeepsIDRoute(t *testing.T) {
 		if response.Code != http.StatusNotFound {
 			t.Fatalf("unmanaged alias %s accepted: %d", path, response.Code)
 		}
+	}
+}
+
+func TestPrivateAppCannotUsePublicOrLegacyRoutes(t *testing.T) {
+	managed := service()
+	managed.Annotations = map[string]string{
+		"polygate.io/route-username": "student-a", "polygate.io/route-app-name": "test-agent-1"}
+	paths, _ := ParsePathRoutes("apps.polylink.org:443")
+	checked, proxied := 0, 0
+	gateway := &Gateway{
+		Resolver: NewResolver(fake.NewSimpleClientset(managed)),
+		Access: publicAccessFunc(func(_ context.Context, appID string) (bool, error) {
+			if appID != testApp {
+				t.Errorf("authorization used alias %q instead of app ID", appID)
+			}
+			checked++
+			return false, nil
+		}),
+		PathRoutes: paths, Suffixes: []string{testSuffix}, PublicPort: "30444",
+		Transport: transportFunc(func(*http.Request) (*http.Response, error) {
+			proxied++
+			return &http.Response{StatusCode: 200, Header: make(http.Header),
+				Body: io.NopCloser(strings.NewReader("leaked"))}, nil
+		}),
+	}
+	for _, rawURL := range []string{
+		"https://apps.polylink.org/student-a/test-agent-1/docs",
+		"https://apps.polylink.org/" + testApp + "/docs",
+		"https://" + testApp + "." + testSuffix + ":30444/docs",
+		"https://apps.polylink.org/student-a/test-agent-1",
+	} {
+		response := httptest.NewRecorder()
+		gateway.ServeHTTP(response, httptest.NewRequest("GET", rawURL, nil))
+		if response.Code != http.StatusNotFound {
+			t.Errorf("private app leaked at %s: %d", rawURL, response.Code)
+		}
+	}
+	if checked != 4 || proxied != 0 {
+		t.Fatalf("authorization checks=%d upstream calls=%d", checked, proxied)
+	}
+	gateway.Access = nil
+	response := httptest.NewRecorder()
+	gateway.ServeHTTP(response, httptest.NewRequest("GET", "https://apps.polylink.org/"+testApp+"/", nil))
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("missing authorization service returned %d", response.Code)
+	}
+	gateway.Access = publicAccessFunc(func(context.Context, string) (bool, error) {
+		return false, errors.New("database unavailable")
+	})
+	response = httptest.NewRecorder()
+	gateway.ServeHTTP(response, httptest.NewRequest("GET", "https://apps.polylink.org/"+testApp+"/", nil))
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("failed authorization service returned %d", response.Code)
+	}
+}
+
+func TestPrivateHostLoginCookieAndProxyIsolation(t *testing.T) {
+	privateRoutes, err := ParseHostRoutes("polylink.org:443")
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths, _ := ParsePathRoutes("apps.polylink.org:443")
+	proxied := 0
+	gateway := &Gateway{
+		Resolver:      NewResolver(fake.NewSimpleClientset(service())),
+		Access:        publicAccessFunc(func(context.Context, string) (bool, error) { return false, nil }),
+		PrivateAccess: privateAccessFake{mode: true}, PrivateHostRoutes: privateRoutes,
+		PathRoutes: paths, ConsoleOrigin: "https://polygate.polylink.org",
+		Transport: transportFunc(func(req *http.Request) (*http.Response, error) {
+			proxied++
+			if req.Header.Get("Cookie") != "app-cookie=ok" {
+				t.Errorf("platform session reached app: %q", req.Header.Get("Cookie"))
+			}
+			response := &http.Response{StatusCode: http.StatusFound, Header: make(http.Header),
+				Body: io.NopCloser(strings.NewReader(""))}
+			response.Header.Set("Location", "http://"+req.URL.Host+"/next")
+			response.Header.Add("Set-Cookie", "__Host-polygate-app-session=forged; Secure; Path=/")
+			response.Header.Add("Set-Cookie", "app-cookie=ok; Secure; Path=/")
+			return response, nil
+		}),
+	}
+	privateURL := "https://" + testApp + ".polylink.org"
+	response := httptest.NewRecorder()
+	gateway.ServeHTTP(response, httptest.NewRequest("GET", privateURL+"/_polygate/route-check", nil))
+	if response.Code != http.StatusNoContent || response.Header().Get("X-PolyGate-Route-App-ID") != testApp {
+		t.Fatalf("route preflight = %d, app=%q", response.Code, response.Header().Get("X-PolyGate-Route-App-ID"))
+	}
+	navigate := httptest.NewRequest("GET", privateURL+"/docs?x=1", nil)
+	navigate.Header.Set("Accept", "text/html,application/xhtml+xml")
+	response = httptest.NewRecorder()
+	gateway.ServeHTTP(response, navigate)
+	want := "https://polygate.polylink.org/auth/app?app=" + testApp + "&return=%2Fdocs%3Fx%3D1"
+	if response.Code != http.StatusFound || response.Header().Get("Location") != want {
+		t.Fatalf("private login redirect = %d %q", response.Code, response.Header().Get("Location"))
+	}
+	response = httptest.NewRecorder()
+	gateway.ServeHTTP(response, httptest.NewRequest("GET", privateURL+"/api/data", nil))
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous API returned %d", response.Code)
+	}
+	crossOrigin := httptest.NewRequest("GET", privateURL+"/socket", nil)
+	crossOrigin.Header.Set("Origin", "https://other-app.polylink.org")
+	crossOrigin.Header.Set("Upgrade", "websocket")
+	crossOrigin.Header.Set("Cookie", privateSessionCookie+"=session-token")
+	response = httptest.NewRecorder()
+	gateway.ServeHTTP(response, crossOrigin)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("cross-origin private WebSocket returned %d", response.Code)
+	}
+	response = httptest.NewRecorder()
+	gateway.ServeHTTP(response, httptest.NewRequest("GET", privateURL+"/_polygate/auth/consume?ticket=one-time-ticket", nil))
+	cookies := response.Result().Cookies()
+	if response.Code != http.StatusFound || response.Header().Get("Location") != "/docs" ||
+		len(cookies) != 1 || cookies[0].Name != privateSessionCookie || !cookies[0].Secure ||
+		!cookies[0].HttpOnly || cookies[0].Domain != "" || cookies[0].Path != "/" {
+		t.Fatalf("private ticket exchange = %d, cookies=%+v, location=%q",
+			response.Code, cookies, response.Header().Get("Location"))
+	}
+	request := httptest.NewRequest("GET", privateURL+"/docs", nil)
+	request.Header.Set("Cookie", privateSessionCookie+"=session-token; app-cookie=ok")
+	response = httptest.NewRecorder()
+	gateway.ServeHTTP(response, request)
+	if response.Code != http.StatusFound || response.Header().Get("Location") != privateURL+"/next" || proxied != 1 {
+		t.Fatalf("authorized private proxy = %d, location=%q, calls=%d",
+			response.Code, response.Header().Get("Location"), proxied)
+	}
+	if got := response.Result().Header.Values("Set-Cookie"); len(got) != 1 || got[0] != "app-cookie=ok; Secure; Path=/" {
+		t.Fatalf("private app response set platform cookie: %q", got)
+	}
+	for _, rawURL := range []string{privateURL + "/_polygate/other", "https://apps.polylink.org/" + testApp + "/"} {
+		response = httptest.NewRecorder()
+		gateway.ServeHTTP(response, httptest.NewRequest("GET", rawURL, nil))
+		if response.Code != http.StatusNotFound {
+			t.Fatalf("reserved or public route %s returned %d", rawURL, response.Code)
+		}
+	}
+	gateway.PrivateAccess = privateAccessFake{mode: false}
+	response = httptest.NewRecorder()
+	gateway.ServeHTTP(response, httptest.NewRequest("GET", privateURL+"/", nil))
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("public app accepted on private host: %d", response.Code)
 	}
 }
 
@@ -123,7 +291,7 @@ func TestHostRoutesSupportInternalAndPublicCutover(t *testing.T) {
 			t.Fatalf("cutover host rejected: %s %s %v", host, appID, err)
 		}
 	}
-	gateway := &Gateway{Resolver: NewResolver(fake.NewSimpleClientset(service())), HostRoutes: routes,
+	gateway := &Gateway{Resolver: NewResolver(fake.NewSimpleClientset(service())), Access: allowPublic, HostRoutes: routes,
 		Transport: transportFunc(func(*http.Request) (*http.Response, error) {
 			return &http.Response{StatusCode: 200, Header: make(http.Header),
 				Body: io.NopCloser(strings.NewReader("cutover-ok"))}, nil
@@ -155,7 +323,7 @@ func TestPathRoutesStripPrefixAndScopeRedirectsAndCookies(t *testing.T) {
 		t.Fatal(err)
 	}
 	var gotPath, gotHost, gotPrefix, gotProto, gotPort string
-	gateway := &Gateway{Resolver: NewResolver(fake.NewSimpleClientset(service())),
+	gateway := &Gateway{Resolver: NewResolver(fake.NewSimpleClientset(service())), Access: allowPublic,
 		Suffixes: []string{testSuffix}, PublicPort: "30444", PathRoutes: paths,
 		Transport: transportFunc(func(req *http.Request) (*http.Response, error) {
 			gotPath, gotHost = req.URL.RequestURI(), req.Host
@@ -212,7 +380,7 @@ func TestPathRouteRejectsInvalidHostAndRewritesInternalAbsoluteRedirect(t *testi
 		}
 	}
 	paths, _ := ParsePathRoutes("apps.polylink.org:443")
-	gateway := &Gateway{Resolver: NewResolver(fake.NewSimpleClientset(service())), PathRoutes: paths,
+	gateway := &Gateway{Resolver: NewResolver(fake.NewSimpleClientset(service())), Access: allowPublic, PathRoutes: paths,
 		Transport: transportFunc(func(req *http.Request) (*http.Response, error) {
 			header := make(http.Header)
 			if req.URL.Path == "/port" {
@@ -241,7 +409,7 @@ func TestPathRouteRejectsInvalidHostAndRewritesInternalAbsoluteRedirect(t *testi
 
 func TestPathRoutePreservesEscapedSuffixAndExternalRedirect(t *testing.T) {
 	var gotURI string
-	gateway := &Gateway{Resolver: NewResolver(fake.NewSimpleClientset(service())),
+	gateway := &Gateway{Resolver: NewResolver(fake.NewSimpleClientset(service())), Access: allowPublic,
 		PathRoutes: []PathRoute{{Host: "apps.polylink.org", Port: "443"}},
 		Transport: transportFunc(func(req *http.Request) (*http.Response, error) {
 			gotURI = req.URL.RequestURI()
@@ -268,7 +436,7 @@ func TestGatewayRoutesOnlyManagedAppAndOverwritesForwardedHeaders(t *testing.T) 
 	resolver := NewResolver(fake.NewSimpleClientset(service()))
 	var upstreamHost, upstreamPath, forwardedFor, forwardedProto, upstreamRequestHost string
 	gateway := &Gateway{
-		Resolver: resolver, Suffixes: []string{testSuffix}, PublicPort: "30444",
+		Resolver: resolver, Access: allowPublic, Suffixes: []string{testSuffix}, PublicPort: "30444",
 		Transport: transportFunc(func(req *http.Request) (*http.Response, error) {
 			upstreamHost, upstreamPath = req.URL.Host, req.URL.RequestURI()
 			forwardedFor, forwardedProto = req.Header.Get("X-Forwarded-For"), req.Header.Get("X-Forwarded-Proto")
@@ -305,7 +473,7 @@ func TestGatewayRoutesOnlyManagedAppAndOverwritesForwardedHeaders(t *testing.T) 
 
 func TestGatewayStripsPlatformCredentialsButPreservesAppCookies(t *testing.T) {
 	resolver := NewResolver(fake.NewSimpleClientset(service()))
-	gateway := &Gateway{Resolver: resolver, Suffixes: []string{testSuffix}, PublicPort: "30444",
+	gateway := &Gateway{Resolver: resolver, Access: allowPublic, Suffixes: []string{testSuffix}, PublicPort: "30444",
 		Transport: transportFunc(func(req *http.Request) (*http.Response, error) {
 			if got := req.Header.Get("Cookie"); got != "app-session=ok; theme=dark" {
 				t.Errorf("unexpected forwarded cookies: %q", got)
@@ -335,7 +503,7 @@ func TestGatewayStripsPlatformCredentialsButPreservesAppCookies(t *testing.T) {
 
 func TestGatewayRejectsReservedAndParentDomainAppCookies(t *testing.T) {
 	resolver := NewResolver(fake.NewSimpleClientset(service()))
-	gateway := &Gateway{Resolver: resolver, Suffixes: []string{testSuffix}, PublicPort: "30444",
+	gateway := &Gateway{Resolver: resolver, Access: allowPublic, Suffixes: []string{testSuffix}, PublicPort: "30444",
 		Transport: transportFunc(func(*http.Request) (*http.Response, error) {
 			header := make(http.Header)
 			header.Add("Set-Cookie", "app-session=ok; Secure; HttpOnly; Path=/")
@@ -377,7 +545,7 @@ func TestResolverKeepsVerifiedRouteDuringShortAPIOutage(t *testing.T) {
 
 func gatewayForBackend(backend *httptest.Server) *Gateway {
 	return &Gateway{
-		Resolver: NewResolver(fake.NewSimpleClientset(service())),
+		Resolver: NewResolver(fake.NewSimpleClientset(service())), Access: allowPublic,
 		Suffixes: []string{testSuffix}, PublicPort: "30444",
 		Transport: transportFunc(func(req *http.Request) (*http.Response, error) {
 			req.URL.Scheme = "http"

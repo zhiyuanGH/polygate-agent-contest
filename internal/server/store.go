@@ -73,6 +73,34 @@ type AdminAccountStore interface {
 	ListAdminAccountAudit(context.Context, string, int) ([]AdminAccountAudit, error)
 }
 
+type AdminApp struct {
+	ID         string    `json:"id"`
+	OwnerID    string    `json:"ownerId"`
+	Username   string    `json:"username"`
+	Name       string    `json:"name"`
+	Status     string    `json:"status"`
+	AccessMode string    `json:"accessMode"`
+	CreatedAt  time.Time `json:"createdAt"`
+}
+
+type AdminAppAccessAudit struct {
+	ID           string    `json:"id"`
+	ActorSubject string    `json:"actorSubject"`
+	Username     string    `json:"username"`
+	AppID        string    `json:"appId"`
+	AppName      string    `json:"appName"`
+	PreviousMode string    `json:"previousMode"`
+	NewMode      string    `json:"newMode"`
+	Reason       string    `json:"reason"`
+	CreatedAt    time.Time `json:"createdAt"`
+}
+
+type AdminAppAccessStore interface {
+	ListAdminApps(context.Context, string) ([]AdminApp, error)
+	SetAdminAppAccess(context.Context, string, string, string, string, string) (AdminApp, error)
+	ListAdminAppAccessAudit(context.Context, string, int) ([]AdminAppAccessAudit, error)
+}
+
 type QuotaChange struct {
 	ID              string       `json:"id"`
 	ActorAccountID  string       `json:"actorAccountId"`

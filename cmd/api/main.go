@@ -104,6 +104,7 @@ func main() {
 			_, _ = w.Write([]byte("student secret queue healthy"))
 		})
 		mux.Handle("/auth/", identity.Routes())
+		mux.Handle("GET /auth/app", identity.AppAccessHandler(store, os.Getenv("POLYGATE_PRIVATE_APP_DOMAIN")))
 		trustedDigest := ""
 		trustedPort := 0
 		if os.Getenv("POLYGATE_DEPLOY_ENABLED") == "1" {
@@ -189,6 +190,13 @@ func main() {
 			}
 			apiHandler.(*server.Handler).SetImageUploader(client.ImportImageTar)
 			apiHandler.(*server.Handler).SetImageReportReader(client.ReadVulnerabilityReport)
+		}
+		if privateDomain := os.Getenv("POLYGATE_PRIVATE_APP_DOMAIN"); privateDomain != "" {
+			check, checkErr := server.NewHTTPPrivateAppRouteChecker(privateDomain)
+			if checkErr != nil {
+				log.Fatal("Private app route checker configuration is invalid: ", checkErr)
+			}
+			apiHandler.(*server.Handler).SetPrivateRouteChecker(check)
 		}
 		if os.Getenv("POLYGATE_ADMIN_PROVISION_ENABLED") == "1" {
 			manager, err := keycloakadmin.New(os.Getenv("POLYGATE_KEYCLOAK_ADMIN_URL"),

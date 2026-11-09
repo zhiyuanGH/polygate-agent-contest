@@ -7,6 +7,7 @@ import { ApiError, api, type AccountActualUsage, type App as AppRecord, type App
 import ImagePage from './ImagePage'
 import AdminAccountsPage from './AdminAccountsPage'
 import AdminResourcesPage from './AdminResourcesPage'
+import AdminAppsPage from './AdminAppsPage'
 import ActivityPage from './ActivityPage'
 import HelpPage from './HelpPage'
 
@@ -49,6 +50,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         <NavLink to="/activity">Activity</NavLink>
         <NavLink to="/help">Help</NavLink>
         {me.data?.role === 'admin' && <NavLink to="/admin/accounts">Accounts</NavLink>}
+        {me.data?.role === 'admin' && <NavLink to="/admin/apps">App access</NavLink>}
         {me.data?.role === 'admin' && <NavLink to="/admin/cluster">Cluster</NavLink>}
       </nav>
       <div className="sidebar-foot">{me.data?.mode === 'authenticated' ? <Button size="small" ghost onClick={() => { void api.logout().then(() => { window.location.href = '/auth/oidc-logout' }).catch((error: unknown) => { window.alert(error instanceof Error ? error.message : 'Could not sign out. Please try again.') }) }}>Sign out</Button> : <><span className="status-dot" />{t('localMode')}</>}</div>
@@ -219,8 +221,11 @@ function Overview() {
         <Button type="link" size="small" onClick={() => { setArtifactId(sourceArtifactId ?? undefined); setImageAction('update'); setImageAppId(item.id) }}>Update image</Button>}
       {me.data.imageDeploymentAvailable && item.status === 'Running' &&
         <Button type="link" size="small" onClick={() => { setRollbackRevisionId(undefined); setRollbackAppId(item.id) }}>Restore version</Button>}
-      {me.data.appAccessBaseURL && item.status === 'Running' &&
-        <Button type="link" size="small" href={appAccessURL(me.data.appAccessBaseURL, item.id, me.data.appAccessRouting, me.data.username, item.spec.name)} target="_blank" rel="noopener noreferrer">Open app</Button>}
+      {item.status === 'Running' && (item.accessMode === 'Owner and administrators' ? me.data.privateAppDomain : me.data.appAccessBaseURL) &&
+        <Button type="link" size="small" href={item.accessMode === 'Owner and administrators'
+          ? `https://${item.id}.${me.data.privateAppDomain}/`
+          : appAccessURL(me.data.appAccessBaseURL!, item.id, me.data.appAccessRouting, me.data.username, item.spec.name)}
+          target="_blank" rel="noopener noreferrer">Open app</Button>}
       {item.status === 'Running' &&
         <Button type="link" size="small" onClick={() => { resourceForm.setFieldsValue({ resources: item.spec.resources, strategy: item.spec.persistent ? 'Recreate' : 'Rolling' }); setEditingApp(item) }}>Change resources</Button>}
       {item.status === 'Running' &&
@@ -649,5 +654,5 @@ function SourcePage() {
 }
 
 export default function App() {
-  return <Shell><Routes><Route path="/" element={<Overview />} /><Route path="/apps/new" element={<NewApp />} /><Route path="/images" element={<ImagePage />} /><Route path="/secrets" element={<SecretsPage />} /><Route path="/volumes" element={<VolumesPage />} /><Route path="/source" element={<SourcePage />} /><Route path="/activity" element={<ActivityPage />} /><Route path="/help" element={<HelpPage />} /><Route path="/admin/accounts" element={<AdminAccountsPage />} /><Route path="/admin/cluster" element={<AdminResourcesPage />} /></Routes></Shell>
+  return <Shell><Routes><Route path="/" element={<Overview />} /><Route path="/apps/new" element={<NewApp />} /><Route path="/images" element={<ImagePage />} /><Route path="/secrets" element={<SecretsPage />} /><Route path="/volumes" element={<VolumesPage />} /><Route path="/source" element={<SourcePage />} /><Route path="/activity" element={<ActivityPage />} /><Route path="/help" element={<HelpPage />} /><Route path="/admin/accounts" element={<AdminAccountsPage />} /><Route path="/admin/apps" element={<AdminAppsPage />} /><Route path="/admin/cluster" element={<AdminResourcesPage />} /></Routes></Shell>
 }

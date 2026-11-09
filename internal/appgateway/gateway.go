@@ -18,6 +18,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"polygate/internal/server"
 )
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
@@ -31,6 +32,7 @@ type Resolver struct {
 	expires    time.Time
 	staleUntil time.Time
 	services   map[string]*url.URL
+	appIDs     map[string]string
 }
 
 func NewResolver(client kubernetes.Interface) *Resolver {
@@ -47,9 +49,15 @@ func validRouteKey(key string) bool {
 	return ok && aliasSegmentPattern.MatchString(username) && aliasSegmentPattern.MatchString(name)
 }
 
-func (r *Resolver) Resolve(ctx context.Context, appID string) (*url.URL, error) {
-	if !validRouteKey(appID) {
-		return nil, ErrNotFound
+func (r *Resolver) Resolve(ctx context.Context, key string) (*url.URL, error) {
+	_, target, err := r.ResolveWithID(ctx, key)
+	return target, err
+}
+
+// ResolveWithID returns the immutable app ID even for a readable alias.
+func (r *Resolver) ResolveWithID(ctx context.Context, key string) (string, *url.URL, error) {
+	if !validRouteKey(key) {
+		return "", nil, ErrNotFound
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -58,13 +66,14 @@ func (r *Resolver) Resolve(ctx context.Context, appID string) (*url.URL, error) 
 			LabelSelector: "app.kubernetes.io/managed-by=polygate",
 		})
 		if err != nil {
-			if cached := r.services[appID]; cached != nil && time.Now().Before(r.staleUntil) {
+			if cached := r.services[key]; cached != nil && time.Now().Before(r.staleUntil) {
 				copy := *cached
-				return &copy, nil
+				return r.appIDs[key], &copy, nil
 			}
-			return nil, err
+			return "", nil, err
 		}
 		services := make(map[string]*url.URL, len(list.Items))
+		appIDs := make(map[string]string, len(list.Items))
 		conflicts := make(map[string]bool)
 		for i := range list.Items {
 			service := &list.Items[i]
@@ -76,26 +85,30 @@ func (r *Resolver) Resolve(ctx context.Context, appID string) (*url.URL, error) 
 				conflicts[id] = true
 			}
 			services[id] = target
+			appIDs[id] = id
 			if alias := serviceAlias(service); alias != "" {
 				if services[alias] != nil {
 					conflicts[alias] = true
 				}
 				services[alias] = target
+				appIDs[alias] = id
 			}
 		}
 		for id := range conflicts {
 			delete(services, id)
+			delete(appIDs, id)
 		}
 		r.services = services
+		r.appIDs = appIDs
 		r.expires = time.Now().Add(5 * time.Second)
 		r.staleUntil = time.Now().Add(5 * time.Minute)
 	}
-	target := r.services[appID]
+	target := r.services[key]
 	if target == nil {
-		return nil, ErrNotFound
+		return "", nil, ErrNotFound
 	}
 	copy := *target
-	return &copy, nil
+	return r.appIDs[key], &copy, nil
 }
 
 func targetFor(service *corev1.Service) (string, *url.URL, bool) {
@@ -144,12 +157,26 @@ func AppIDFromHost(host, port string, suffixes []string) (string, error) {
 }
 
 type Gateway struct {
-	Resolver   *Resolver
-	Suffixes   []string
-	PublicPort string
-	HostRoutes []HostRoute
-	PathRoutes []PathRoute
-	Transport  http.RoundTripper
+	Resolver          *Resolver
+	Access            PublicAccessChecker
+	PrivateAccess     PrivateAccessChecker
+	Suffixes          []string
+	PublicPort        string
+	HostRoutes        []HostRoute
+	PrivateHostRoutes []HostRoute
+	PathRoutes        []PathRoute
+	ConsoleOrigin     string
+	Transport         http.RoundTripper
+}
+
+type PublicAccessChecker interface {
+	PublicAppAllowed(context.Context, string) (bool, error)
+}
+
+type PrivateAccessChecker interface {
+	PrivateAppAllowed(context.Context, string) (bool, error)
+	AppAccessSessionAllowed(context.Context, string, string) (bool, error)
+	ConsumeAppAccessTicket(context.Context, string, string) (string, string, error)
 }
 
 type HostRoute struct {
@@ -384,6 +411,83 @@ func scopePathCookies(response *http.Response, prefix string) {
 	}
 }
 
+const privateSessionCookie = "__Host-polygate-app-session"
+
+func (g *Gateway) authorizePrivate(w http.ResponseWriter, req *http.Request, appID string) bool {
+	if g.PrivateAccess == nil || g.ConsoleOrigin == "" {
+		http.Error(w, "App authorization unavailable", http.StatusServiceUnavailable)
+		return false
+	}
+	private, err := g.PrivateAccess.PrivateAppAllowed(req.Context(), appID)
+	if err != nil {
+		http.Error(w, "App authorization temporarily unavailable", http.StatusServiceUnavailable)
+		return false
+	}
+	if !private {
+		http.NotFound(w, req)
+		return false
+	}
+	if req.URL.Path == "/_polygate" || strings.HasPrefix(req.URL.Path, "/_polygate/") {
+		if req.URL.Path != "/_polygate/auth/consume" {
+			http.NotFound(w, req)
+			return false
+		}
+		if req.Method != http.MethodGet {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return false
+		}
+		session, returnPath, err := g.PrivateAccess.ConsumeAppAccessTicket(req.Context(), appID,
+			req.URL.Query().Get("ticket"))
+		if errors.Is(err, server.ErrForbidden) {
+			http.Error(w, "App sign-in link expired or invalid", http.StatusForbidden)
+			return false
+		}
+		if err != nil {
+			http.Error(w, "App authorization temporarily unavailable", http.StatusServiceUnavailable)
+			return false
+		}
+		http.SetCookie(w, &http.Cookie{Name: privateSessionCookie, Value: session, Path: "/",
+			MaxAge: int((8 * time.Hour).Seconds()), Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		http.Redirect(w, req, returnPath, http.StatusFound)
+		return false
+	}
+	expectedHost := req.Host
+	if hostname, port, err := net.SplitHostPort(req.Host); err == nil && port == "443" {
+		expectedHost = hostname
+	}
+	origin := req.Header.Get("Origin")
+	if origin != "" && origin != "https://"+expectedHost ||
+		strings.EqualFold(req.Header.Get("Upgrade"), "websocket") && origin == "" {
+		http.Error(w, "Cross-origin app request denied", http.StatusForbidden)
+		return false
+	}
+	session := ""
+	if cookie, err := req.Cookie(privateSessionCookie); err == nil {
+		session = cookie.Value
+	}
+	allowed, err := g.PrivateAccess.AppAccessSessionAllowed(req.Context(), appID, session)
+	if err != nil {
+		http.Error(w, "App authorization temporarily unavailable", http.StatusServiceUnavailable)
+		return false
+	}
+	if allowed {
+		return true
+	}
+	if req.Method == http.MethodGet && strings.Contains(req.Header.Get("Accept"), "text/html") &&
+		!strings.EqualFold(req.Header.Get("Upgrade"), "websocket") {
+		next := g.ConsoleOrigin + "/auth/app?app=" + url.QueryEscape(appID) +
+			"&return=" + url.QueryEscape(req.URL.RequestURI())
+		w.Header().Set("Cache-Control", "no-store")
+		http.Redirect(w, req, next, http.StatusFound)
+		return false
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	http.Error(w, "Sign in to access this app", http.StatusUnauthorized)
+	return false
+}
+
 func (g *Gateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if req.URL.Path == "/healthz" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -395,11 +499,18 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	appID, prefix, pathMode, addSlash := pathAppID(req, g.PathRoutes)
+	privateMode := false
 	if !pathMode {
 		var err error
-		appID, err = AppIDFromHost(req.Host, g.PublicPort, g.Suffixes)
-		if len(g.HostRoutes) > 0 {
-			appID, err = AppIDFromRoutes(req.Host, g.HostRoutes)
+		if len(g.PrivateHostRoutes) > 0 {
+			appID, err = AppIDFromRoutes(req.Host, g.PrivateHostRoutes)
+			privateMode = err == nil
+		}
+		if !privateMode {
+			appID, err = AppIDFromHost(req.Host, g.PublicPort, g.Suffixes)
+			if len(g.HostRoutes) > 0 {
+				appID, err = AppIDFromRoutes(req.Host, g.HostRoutes)
+			}
 		}
 		if err != nil {
 			http.Error(w, "Unknown app host", http.StatusMisdirectedRequest)
@@ -409,21 +520,46 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		http.NotFound(w, req)
 		return
 	}
-	if addSlash {
-		http.Redirect(w, req, prefix+"/"+querySuffix(req.URL.RawQuery), http.StatusPermanentRedirect)
-		return
-	}
 	if appID == "" {
 		http.Error(w, "Unknown app host", http.StatusMisdirectedRequest)
 		return
 	}
-	target, err := g.Resolver.Resolve(req.Context(), appID)
+	canonicalID, target, err := g.Resolver.ResolveWithID(req.Context(), appID)
 	if errors.Is(err, ErrNotFound) {
 		http.NotFound(w, req)
 		return
 	}
 	if err != nil {
 		http.Error(w, "App routing temporarily unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if privateMode && req.Method == http.MethodGet && req.URL.Path == "/_polygate/route-check" {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-PolyGate-Route-App-ID", canonicalID)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if privateMode {
+		if !g.authorizePrivate(w, req, canonicalID) {
+			return
+		}
+	} else {
+		if g.Access == nil {
+			http.Error(w, "App authorization unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		public, err := g.Access.PublicAppAllowed(req.Context(), canonicalID)
+		if err != nil {
+			http.Error(w, "App authorization temporarily unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		if !public {
+			http.NotFound(w, req)
+			return
+		}
+	}
+	if addSlash {
+		http.Redirect(w, req, prefix+"/"+querySuffix(req.URL.RawQuery), http.StatusPermanentRedirect)
 		return
 	}
 	upstreamPath, upstreamRawPath := req.URL.Path, req.URL.RawPath
@@ -443,6 +579,10 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		Transport:     g.Transport,
 		FlushInterval: -1,
 		ModifyResponse: func(response *http.Response) error {
+			if privateMode {
+				rewritePathLocation(response, "", target, req.Host)
+				return stripAppSetCookies(response)
+			}
 			if pathMode {
 				rewritePathLocation(response, prefix, target, req.Host)
 				scopePathCookies(response, prefix)

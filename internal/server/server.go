@@ -18,10 +18,11 @@ import (
 )
 
 type App struct {
-	ID        string         `json:"id"`
-	Spec      domain.AppSpec `json:"spec"`
-	Status    string         `json:"status"`
-	CreatedAt time.Time      `json:"createdAt"`
+	ID         string         `json:"id"`
+	Spec       domain.AppSpec `json:"spec"`
+	AccessMode string         `json:"accessMode"`
+	Status     string         `json:"status"`
+	CreatedAt  time.Time      `json:"createdAt"`
 }
 
 type Handler struct {
@@ -43,6 +44,7 @@ type Handler struct {
 	imageUploader      func(context.Context, string, string, string) (registry.Image, error)
 	imageUploadSlots   chan struct{}
 	imageReportReader  func(context.Context, string, string, string) ([]byte, error)
+	privateRouteCheck  func(context.Context, string) error
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) { h.mux.ServeHTTP(w, r) }
@@ -55,6 +57,10 @@ func (h *Handler) SetImageUploader(upload func(context.Context, string, string, 
 
 func (h *Handler) SetImageReportReader(read func(context.Context, string, string, string) ([]byte, error)) {
 	h.imageReportReader = read
+}
+
+func (h *Handler) SetPrivateRouteChecker(check func(context.Context, string) error) {
+	h.privateRouteCheck = check
 }
 
 type AppLogReader interface {
@@ -142,6 +148,9 @@ func newHandler(store Store, authenticate func(*http.Request) (Principal, error)
 	mux.HandleFunc("GET /api/v1/me", h.me)
 	mux.HandleFunc("GET /api/v1/usage/actual", h.accountActualUsage)
 	mux.HandleFunc("GET /api/v1/admin/accounts", h.listAdminAccounts)
+	mux.HandleFunc("GET /api/v1/admin/apps", h.listAdminApps)
+	mux.HandleFunc("PATCH /api/v1/admin/apps/{id}/access", h.setAdminAppAccess)
+	mux.HandleFunc("GET /api/v1/admin/app-access-audit", h.listAdminAppAccessAudit)
 	mux.HandleFunc("GET /api/v1/admin/cluster-resources", h.adminClusterResources)
 	mux.HandleFunc("PATCH /api/v1/admin/accounts/{id}/enabled", h.setAdminAccountEnabled)
 	mux.HandleFunc("GET /api/v1/admin/account-audit", h.listAdminAccountAudit)
@@ -396,6 +405,7 @@ func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
 		"secretAvailable":            h.secretCatalog != nil,
 		"appAccessBaseURL":           os.Getenv("POLYGATE_APP_ACCESS_BASE_URL"),
 		"appAccessRouting":           os.Getenv("POLYGATE_APP_ACCESS_ROUTING"),
+		"privateAppDomain":           os.Getenv("POLYGATE_PRIVATE_APP_DOMAIN"),
 		"adminQuotaAvailable":        account.Role == "admin" && h.adminQuotaEnabled,
 		"adminProvisionAvailable":    account.Role == "admin" && os.Getenv("POLYGATE_ADMIN_PROVISION_ENABLED") == "1",
 		"message":                    message,

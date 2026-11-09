@@ -52,7 +52,7 @@ func (s *Store) Account(ctx context.Context, id string) (server.Account, error) 
 
 const appColumns = `id::text, name, image, port, cpu_request_milli,
     cpu_limit_milli, memory_mib, replicas, persistent,
-    COALESCE(volume_id::text,''),COALESCE(mount_path,''),health_path,secret_keys,status,created_at`
+    COALESCE(volume_id::text,''),COALESCE(mount_path,''),health_path,secret_keys,access_mode,status,created_at`
 
 type rowScanner interface{ Scan(...any) error }
 
@@ -61,7 +61,7 @@ func scanApp(row rowScanner) (server.App, error) {
 	err := row.Scan(&a.ID, &a.Spec.Name, &a.Spec.Image, &a.Spec.Port,
 		&a.Spec.Resources.CPURequestMilli, &a.Spec.Resources.CPULimitMilli,
 		&a.Spec.Resources.MemoryMiB, &a.Spec.Resources.Replicas,
-		&a.Spec.Persistent, &a.Spec.VolumeID, &a.Spec.MountPath, &a.Spec.HealthPath, &a.Spec.SecretKeys, &a.Status, &a.CreatedAt)
+		&a.Spec.Persistent, &a.Spec.VolumeID, &a.Spec.MountPath, &a.Spec.HealthPath, &a.Spec.SecretKeys, &a.AccessMode, &a.Status, &a.CreatedAt)
 	if len(a.Spec.SecretKeys) == 0 {
 		a.Spec.SecretKeys = nil
 	}
@@ -214,7 +214,7 @@ func (s *Store) create(ctx context.Context, id, subject, key string, spec domain
 	if err = tx.Commit(ctx); err != nil {
 		return server.App{}, false, storeError(err)
 	}
-	return server.App{ID: appID, Spec: spec, Status: "Draft", CreatedAt: createdAt}, false, nil
+	return server.App{ID: appID, Spec: spec, AccessMode: "Public", Status: "Draft", CreatedAt: createdAt}, false, nil
 }
 
 func (s *Store) Delete(ctx context.Context, id, subject, appID string) error {

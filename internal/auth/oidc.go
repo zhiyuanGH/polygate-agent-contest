@@ -119,6 +119,7 @@ func (s *Service) setCookie(w http.ResponseWriter, name, value string, age int) 
 }
 
 func (s *Service) Login(w http.ResponseWriter, r *http.Request) {
+	returnPath := appLoginReturnPath(r.URL.Query().Get("next"))
 	state, err := randomToken()
 	if err != nil {
 		authError(w, http.StatusInternalServerError, "Could not start sign-in.")
@@ -135,8 +136,9 @@ func (s *Service) Login(w http.ResponseWriter, r *http.Request) {
 		authError(w, http.StatusInternalServerError, "Could not start sign-in.")
 		return
 	}
-	_, err = s.pool.Exec(r.Context(), `INSERT INTO auth_flows(flow_hash,state_hash,nonce_hash,pkce_verifier,expires_at)
-        VALUES($1,$2,$3,$4,$5)`, tokenHash(flow), tokenHash(state), tokenHash(nonce), verifier, time.Now().Add(flowTTL))
+	_, err = s.pool.Exec(r.Context(), `INSERT INTO auth_flows(flow_hash,state_hash,nonce_hash,pkce_verifier,expires_at,return_path)
+        VALUES($1,$2,$3,$4,$5,$6)`, tokenHash(flow), tokenHash(state), tokenHash(nonce), verifier,
+		time.Now().Add(flowTTL), returnPath)
 	if err != nil {
 		authError(w, http.StatusServiceUnavailable, "Sign-in is temporarily unavailable.")
 		return
@@ -153,9 +155,9 @@ func (s *Service) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 	s.setCookie(w, s.flowCookieName(), "", -1)
 	var stateHash, nonceHash []byte
-	var verifier string
+	var verifier, returnPath string
 	err = s.pool.QueryRow(r.Context(), `DELETE FROM auth_flows WHERE flow_hash=$1 AND expires_at>now()
-        RETURNING state_hash,nonce_hash,pkce_verifier`, tokenHash(c.Value)).Scan(&stateHash, &nonceHash, &verifier)
+        RETURNING state_hash,nonce_hash,pkce_verifier,return_path`, tokenHash(c.Value)).Scan(&stateHash, &nonceHash, &verifier, &returnPath)
 	if err != nil {
 		authError(w, http.StatusBadRequest, "Sign-in session expired. Please try again.")
 		return
@@ -199,7 +201,19 @@ func (s *Service) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 	s.setCookie(w, s.sessionCookieName(), sessionID, int(sessionTTL.Seconds()))
 	s.setCookie(w, s.idTokenCookieName(), rawID, int(sessionTTL.Seconds()))
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, returnPath, http.StatusFound)
+}
+
+func appLoginReturnPath(raw string) string {
+	if raw == "" || len(raw) > 2300 || !strings.HasPrefix(raw, "/auth/app?") ||
+		strings.ContainsAny(raw, "\\\r\n\x00") {
+		return "/"
+	}
+	parsed, err := url.ParseRequestURI(raw)
+	if err != nil || parsed.IsAbs() || parsed.Host != "" || parsed.Path != "/auth/app" || parsed.Fragment != "" {
+		return "/"
+	}
+	return raw
 }
 
 func (s *Service) current(r *http.Request) (server.Principal, []byte, error) {
@@ -272,7 +286,12 @@ func (s *Service) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c, _ := r.Cookie(s.sessionCookieName())
-	if _, err := s.pool.Exec(r.Context(), `DELETE FROM auth_sessions WHERE session_hash=$1`, tokenHash(c.Value)); err != nil {
+	if _, err := s.pool.Exec(r.Context(), `WITH ended AS (
+		DELETE FROM auth_sessions WHERE session_hash=$1 RETURNING account_id
+	), revoked AS (
+		DELETE FROM app_access_sessions WHERE account_id IN (SELECT account_id FROM ended)
+	)
+	DELETE FROM app_access_tickets WHERE account_id IN (SELECT account_id FROM ended)`, tokenHash(c.Value)); err != nil {
 		authError(w, http.StatusServiceUnavailable, "Sign-out is temporarily unavailable.")
 		return
 	}

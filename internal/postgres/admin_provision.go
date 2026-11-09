@@ -127,6 +127,12 @@ func (s *Store) StudentForPasswordReset(ctx context.Context, actorID, targetID s
 	if _, err = tx.Exec(ctx, `DELETE FROM auth_sessions WHERE account_id=$1`, targetID); err != nil {
 		return "", storeError(err)
 	}
+	if _, err = tx.Exec(ctx, `DELETE FROM app_access_sessions WHERE account_id=$1`, targetID); err != nil {
+		return "", storeError(err)
+	}
+	if _, err = tx.Exec(ctx, `DELETE FROM app_access_tickets WHERE account_id=$1`, targetID); err != nil {
+		return "", storeError(err)
+	}
 	if err = tx.Commit(ctx); err != nil {
 		return "", storeError(err)
 	}
@@ -147,6 +153,12 @@ func (s *Store) RecordPasswordReset(ctx context.Context, actorID, actorSubject, 
 		return storeError(err)
 	}
 	if _, err = tx.Exec(ctx, `DELETE FROM auth_sessions WHERE account_id=$1`, targetID); err != nil {
+		return storeError(err)
+	}
+	if _, err = tx.Exec(ctx, `DELETE FROM app_access_sessions WHERE account_id=$1`, targetID); err != nil {
+		return storeError(err)
+	}
+	if _, err = tx.Exec(ctx, `DELETE FROM app_access_tickets WHERE account_id=$1`, targetID); err != nil {
 		return storeError(err)
 	}
 	id, err := server.NewID()

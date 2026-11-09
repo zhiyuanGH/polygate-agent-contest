@@ -95,6 +95,12 @@ func (s *Store) SetAdminAccountEnabled(ctx context.Context, actorID, actorSubjec
 			if _, err = tx.Exec(ctx, `DELETE FROM auth_sessions WHERE account_id=$1`, targetID); err != nil {
 				return empty, storeError(err)
 			}
+			if _, err = tx.Exec(ctx, `DELETE FROM app_access_sessions WHERE account_id=$1`, targetID); err != nil {
+				return empty, storeError(err)
+			}
+			if _, err = tx.Exec(ctx, `DELETE FROM app_access_tickets WHERE account_id=$1`, targetID); err != nil {
+				return empty, storeError(err)
+			}
 		}
 		id, idErr := server.NewID()
 		if idErr != nil {

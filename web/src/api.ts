@@ -28,6 +28,7 @@ export type Volume = {
 export type App = {
   id: string
   spec: AppSpec
+  accessMode: 'Public' | 'Owner and administrators'
   status: 'Draft' | 'Queued' | 'Building' | 'Deploying' | 'Running' | 'Stopping' | 'Stopped' | 'Failed' | 'Deleting'
   createdAt: string
 }
@@ -115,6 +116,29 @@ export type Me = {
 	secretAvailable: boolean
 	appAccessBaseURL?: string
 	appAccessRouting?: 'host' | 'path'
+	privateAppDomain?: string
+}
+
+export type AdminApp = {
+  id: string
+  ownerId: string
+  username: string
+  name: string
+  status: App['status']
+  accessMode: App['accessMode']
+  createdAt: string
+}
+
+export type AdminAppAccessAudit = {
+  id: string
+  actorSubject: string
+  username: string
+  appId: string
+  appName: string
+  previousMode: App['accessMode']
+  newMode: App['accessMode']
+  reason: string
+  createdAt: string
 }
 
 export type AdminAccount = {
@@ -241,6 +265,12 @@ export const api = {
   me: () => request<Me>('/me'),
   accountActualUsage: () => request<AccountActualUsage>('/usage/actual'),
   adminAccounts: async () => (await request<{ items: AdminAccount[] }>('/admin/accounts')).items,
+  adminApps: async () => (await request<{ items: AdminApp[] }>('/admin/apps')).items,
+  adminAppAccessAudit: async () => (await request<{ items: AdminAppAccessAudit[] }>('/admin/app-access-audit')).items,
+  setAdminAppAccess: ({ id, mode, reason }: { id: string; mode: App['accessMode']; reason: string }) =>
+    request<AdminApp>(`/admin/apps/${encodeURIComponent(id)}/access`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode, reason }),
+    }),
   adminClusterResources: () => request<ClusterResources>('/admin/cluster-resources'),
   createAdminAccount: (input: { username: string; displayName: string; reason: string }) =>
     request<{ account: AdminAccount; temporaryPassword: string }>('/admin/accounts', {
