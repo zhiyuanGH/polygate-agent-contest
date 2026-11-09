@@ -51,8 +51,8 @@ func TestImageScanEvidenceIsAccountBoundAndAtomic(t *testing.T) {
 		}
 		return registry.Image{OS: "linux", Architecture: "amd64", RegistryHost: "registry.example",
 			SubmittedReference: "registry.example/team/agent:v1",
-			PinnedReference: "registry.example/team/agent@" + manifest,
-			ManifestDigest: manifest, PlatformDigest: platform}
+			PinnedReference:    "registry.example/team/agent@" + manifest,
+			ManifestDigest:     manifest, PlatformDigest: platform}
 	}
 	first, _, err := store.SaveImageArtifact(ctx, aID, "student-a", makeImage("a"))
 	if err != nil {
@@ -97,10 +97,33 @@ func TestImageScanEvidenceIsAccountBoundAndAtomic(t *testing.T) {
 	if err != nil || !replay || decision != "Approved" {
 		t.Fatalf("idempotent scan: decision=%q replay=%v err=%v", decision, replay, err)
 	}
-	high := makeEvidence(second.PlatformDigest, map[string]int{"High": 1}, 1)
-	decision, replay, err = store.recordImageScanDirect(ctx, aID, second.ID, ref(aID, high.Digest), high)
+	critical := makeEvidence(second.PlatformDigest, map[string]int{"Critical": 1}, 1)
+	decision, replay, err = store.recordImageScanDirect(ctx, aID, second.ID, ref(aID, critical.Digest), critical)
 	if err != nil || replay || decision != "Rejected" {
-		t.Fatalf("high severity scan: decision=%q replay=%v err=%v", decision, replay, err)
+		t.Fatalf("critical severity scan: decision=%q replay=%v err=%v", decision, replay, err)
+	}
+	archived, err := store.GetImageScanReportPointer(ctx, aID, second.ID)
+	if err != nil || string(archived.ReportBody) != string(critical.Report) ||
+		archived.BodySHA256 != critical.ReportSHA256 {
+		t.Fatalf("scan report was not archived with evidence: %+v %v", archived, err)
+	}
+	if _, err := store.Pool.Exec(ctx, `UPDATE image_artifacts SET
+		scan_report_body=NULL,scan_report_body_sha256=NULL WHERE id=$1`, second.ID); err != nil {
+		t.Fatal(err)
+	}
+	backfillBody := []byte(`{"vulnerabilities":[{"id":"CVE-BACKFILL"}]}`)
+	if err := store.ArchiveImageScanReport(ctx, bID, second.ID, ref(aID, critical.Digest),
+		critical.ReportID, backfillBody); !errors.Is(err, server.ErrNotFound) {
+		t.Fatalf("cross-account report archive accepted: %v", err)
+	}
+	if err := store.ArchiveImageScanReport(ctx, aID, second.ID, ref(aID, critical.Digest),
+		critical.ReportID, backfillBody); err != nil {
+		t.Fatal(err)
+	}
+	archived, err = store.GetImageScanReportPointer(ctx, aID, second.ID)
+	if err != nil || string(archived.ReportBody) != string(backfillBody) ||
+		archived.BodySHA256 == critical.ReportSHA256 {
+		t.Fatalf("backfilled report mismatch: %+v %v", archived, err)
 	}
 	var approved, rejected, audits int
 	if err := store.Pool.QueryRow(ctx, `SELECT

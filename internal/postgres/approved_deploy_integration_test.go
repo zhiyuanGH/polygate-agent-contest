@@ -126,7 +126,7 @@ func TestQueueApprovedImageDeployIsAccountBound(t *testing.T) {
 	rejectedEvidence.Digest = rejected.PlatformDigest
 	rejectedEvidence.ReportID = "rejected-report-1"
 	rejectedEvidence.Total = 1
-	rejectedEvidence.Severities = map[string]int{"high": 1}
+	rejectedEvidence.Severities = map[string]int{"critical": 1}
 	rejectedRef := harbor.RegistryHost + "/" + project + "/agent@" + rejected.PlatformDigest
 	if decision, _, err := store.recordImageScanDirect(ctx, aID, rejected.ID,
 		rejectedRef, rejectedEvidence); err != nil || decision != "Rejected" {
@@ -140,7 +140,7 @@ func TestQueueApprovedImageDeployIsAccountBound(t *testing.T) {
 	for _, item := range listed {
 		if item.ID == rejected.ID {
 			foundRejectionSummary = item.ScanStatus == "Rejected" &&
-				item.ScanSummary != nil && item.ScanSummary.Severities["High"] == 1
+				item.ScanSummary != nil && item.ScanSummary.Severities["Critical"] == 1
 		}
 	}
 	if !foundRejectionSummary {

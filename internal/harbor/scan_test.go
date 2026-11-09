@@ -174,7 +174,7 @@ func TestEvidenceDecision(t *testing.T) {
 	}{
 		{"clean", 0, map[string]int{}, "Approved"},
 		{"medium", 1, map[string]int{"Medium": 1}, "Approved"},
-		{"high", 1, map[string]int{"High": 1}, "Rejected"},
+		{"high", 1, map[string]int{"High": 1}, "Approved"},
 		{"critical", 1, map[string]int{"Critical": 1}, "Rejected"},
 		{"unknown", 1, map[string]int{"Unknown": 1}, "Rejected"},
 		{"unclassified", 1, map[string]int{}, ""},

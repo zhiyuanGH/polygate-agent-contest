@@ -27,7 +27,7 @@ function scanDetails(item: ImageArtifact) {
     .map(level => `${level}: ${item.scanSummary?.severities[level]}`)
   const result = counts.length ? counts.join(' · ') : 'No vulnerabilities reported'
   return item.scanStatus === 'Rejected'
-    ? `${result}. Critical, High or Unknown findings block deployment.`
+    ? `${result}. Critical or Unknown findings block deployment.`
     : `${result}. Checked under ${item.scanSummary.policyVersion}.`
 }
 

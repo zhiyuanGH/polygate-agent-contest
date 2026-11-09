@@ -47,7 +47,9 @@ npm run dev
 
 1. **源码 ZIP**：前端按 8 MiB 分块上传；`internal/source` 检查路径、符号链接和大小（压缩后最多 100 MiB、展开后最多 1 GiB）；PostgreSQL 保存持久任务；`cmd/sourcebuildworker` 调用可信构建后端，镜像推入 Harbor。Source ZIP 页面显示任务状态和日志。
 2. **已构建镜像**：公开引用由 registry resolver 解析；本机 `.tar` 由镜像上传接口接收，再由 `internal/harbor/import_tar.go` 推入该账号的 Harbor 项目。tar 最多 1 GiB，须包含一张 `linux/amd64` 镜像。上传成功并不等于允许部署。
-3. **扫描与部署**：`cmd/imagescanworker` 运行 Harbor Trivy，记录固定镜像摘要、扫描 ID、报告哈希、严重度和自动决策。`severity-v1` 阻止含 Critical、High、Unknown 或未识别严重度的镜像部署。已完成的扫描报告可在 **My images** 查看和下载。批准后的镜像由数据库事务核对账号与全局容量并预留资源，再由 `cmd/worker` 对账 Kubernetes 对象，最终显示 Running 或 Failed。
+3. **扫描与部署**：`cmd/imagescanworker` 运行 Harbor Trivy，记录固定镜像摘要、扫描 ID、报告哈希、严重度和自动决策。试点策略 `severity-v2` 允许含 High 的镜像，阻止 Critical、Unknown 和未识别的严重度；High 仍显示在报告中。已完成的扫描报告可在 **My images** 查看和下载。新报告连同 SHA-256 校验值存入 PostgreSQL；旧报告首次从 Harbor 读取后归档。批准后的镜像由数据库事务核对账号与全局容量并预留资源，再由 `cmd/worker` 对账 Kubernetes 对象，最终显示 Running 或 Failed。
+
+前端结构和开发流程见 [web/FRONTEND.md](web/FRONTEND.md)。
 
 修改写接口时要保留账号归属检查、CSRF、幂等键与任务重试语义。新增 Kubernetes 对象必须带账号 ID、应用 ID 标签，供网关和清理逻辑核验。对失败路径要检查是否留下任务租约、容量预留或孤儿资源。
 

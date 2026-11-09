@@ -299,10 +299,11 @@ func (s *Store) recordImageScan(ctx context.Context, accountID, artifactID,
 	}
 	_, err = tx.Exec(ctx, `UPDATE image_artifacts SET scan_status=$3,
         harbor_reference=$4,scan_report_sha256=$5,scan_report_id=$6,
-        scanner_name=$7,scan_completed_at=$8,scan_summary=$9::jsonb
+        scanner_name=$7,scan_completed_at=$8,scan_summary=$9::jsonb,
+        scan_report_body=$10,scan_report_body_sha256=$5
         WHERE id=$1 AND account_id=$2 AND scan_status='PendingScan'`,
 		artifactID, accountID, decision, harborReference, evidence.ReportSHA256,
-		evidence.ReportID, evidence.ScannerName, evidence.ScannedAt, summary)
+		evidence.ReportID, evidence.ScannerName, evidence.ScannedAt, summary, []byte(evidence.Report))
 	if err != nil {
 		return "", false, storeError(err)
 	}

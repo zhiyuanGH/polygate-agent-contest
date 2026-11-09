@@ -233,10 +233,16 @@ type ImageScanReportPointer struct {
 	ReportID        string
 	ReportSHA256    string
 	ScanStatus      string
+	ReportBody      []byte
+	BodySHA256      string
 }
 
 type ImageScanReportStore interface {
 	GetImageScanReportPointer(context.Context, string, string) (ImageScanReportPointer, error)
+}
+
+type ImageScanReportArchiver interface {
+	ArchiveImageScanReport(context.Context, string, string, string, string, []byte) error
 }
 
 type ImageDeletionStore interface {

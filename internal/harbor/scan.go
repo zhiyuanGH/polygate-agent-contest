@@ -24,7 +24,7 @@ const maxReportBytes = 8 << 20
 
 // PolicyVersion identifies the automatic decision rules stored with each
 // completed scan. Deployment admission must match this exact version.
-const PolicyVersion = "severity-v1"
+const PolicyVersion = "severity-v2"
 
 var simpleName = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,127}$`)
 var digestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
@@ -60,8 +60,8 @@ type Evidence struct {
 	Report       json.RawMessage
 }
 
-// Decision applies the initial automatic policy. Critical, high, unknown or
-// unclassified findings require rejection; lower severities are recorded.
+// Decision rejects Critical and Unknown findings. High findings are recorded
+// but allowed for the trusted pilot. Unclassified evidence fails validation.
 func (e Evidence) Decision() (string, error) {
 	if !digestPattern.MatchString(e.Digest) || e.ReportID == "" || e.ScannerName == "" ||
 		e.ScannedAt.IsZero() || e.Total < 0 || e.Fixable < 0 || e.Fixable > e.Total ||
@@ -80,9 +80,9 @@ func (e Evidence) Decision() (string, error) {
 		}
 		counted += count
 		switch strings.ToLower(severity) {
-		case "critical", "high", "unknown":
+		case "critical", "unknown":
 			reject = reject || count > 0
-		case "medium", "low", "negligible", "none":
+		case "high", "medium", "low", "negligible", "none":
 		default:
 			return "", fmt.Errorf("unsupported scan severity %q", severity)
 		}

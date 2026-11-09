@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -70,6 +71,14 @@ func main() {
 		log.Fatal("Image scanner database connection failed")
 	}
 	defer store.Close()
+	if len(os.Args) == 2 && os.Args[1] == "--backfill-reports" {
+		backfillCtx, finish := context.WithTimeout(ctx, 10*time.Minute)
+		defer finish()
+		if err := backfillReports(backfillCtx, store, client); err != nil {
+			log.Fatal("Image scan report backfill failed: ", err)
+		}
+		return
+	}
 	id, err := server.NewID()
 	if err != nil {
 		log.Fatal("Image scanner worker identity failed")
@@ -95,4 +104,35 @@ func main() {
 		case <-ticker.C:
 		}
 	}
+}
+
+func backfillReports(ctx context.Context, store *postgres.Store, client *harbor.Client) error {
+	items, err := store.ListUnarchivedScanReports(ctx, 1000)
+	if err != nil {
+		return err
+	}
+	archived := 0
+	failed := 0
+	for _, item := range items {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		report, err := client.ReadVulnerabilityReport(ctx, item.HarborReference,
+			item.ReportID, item.ReportSHA256)
+		if err == nil {
+			err = store.ArchiveImageScanReport(ctx, item.AccountID, item.ArtifactID,
+				item.HarborReference, item.ReportID, report)
+		}
+		if err != nil {
+			failed++
+			log.Printf("Image scan report backfill failed artifact=%s: %v", item.ArtifactID, err)
+			continue
+		}
+		archived++
+	}
+	log.Printf("IMAGE_SCAN_REPORT_BACKFILL archived=%d failed=%d total=%d", archived, failed, len(items))
+	if failed > 0 || len(items) == 1000 {
+		return fmt.Errorf("image scan report backfill incomplete: failed=%d fetched=%d", failed, len(items))
+	}
+	return nil
 }
