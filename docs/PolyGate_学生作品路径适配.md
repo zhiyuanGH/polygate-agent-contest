@@ -1,5 +1,7 @@
 # PolyGate 学生 Web 应用的路径适配
 
+在控制台 **New app** 输入 App name 时，页面会按当前账号实时预览完整公网 URL 和基础路径。该地址在应用部署并达到 Running 后才可访问。`student-a` 与 `student-b` 的真实浏览器预览均已验证；仅填写名称不会创建应用。
+
 更新：2026-11-10。作品的易读地址为 `https://apps.polylink.org/<username>/<app-name>/`，例如 `https://apps.polylink.org/student-a/test-agent-1/`。原来的 `https://apps.polylink.org/<app-id>/` 地址继续可用，适合作为不随展示路径变化的回退链接。
 
 ## 为什么不能自动兼容所有应用
