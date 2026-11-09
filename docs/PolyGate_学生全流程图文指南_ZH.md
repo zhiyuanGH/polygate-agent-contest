@@ -114,7 +114,7 @@
 
 提交自己的源码时：Python 模板的 `main.py`、Node.js 模板的 `package.json` 和 `package-lock.json`、或自定义方式的 `Dockerfile` 必须在 ZIP 根目录。先看程序启动命令或日志，确认实际监听端口，再把同一个数字填进 **App port**。Dockerfile 的 `EXPOSE` 只是声明，不能证明程序确实监听该端口。程序应监听 `0.0.0.0` 和表单里填的端口。只有应用健康时真正返回 HTTP 2xx 或 3xx，才填写 HTTP 健康检查路径。
 
-如果已有**预构建镜像**：进入 **My images**，可以填写公开镜像引用并点击 **Inspect image**，也可以点击 **Upload image** 上传本机 `docker save` 生成的 `.tar`。归档最多 1 GiB，须包含一张 `linux/amd64` 镜像。等到 **Approved**；若显示 **Rejected**，可用 **View report** 查看或 **Download JSON** 下载 Trivy 报告。然后进入 **New app**，按镜像内程序的真实监听端口和资源创建草稿；到 **Overview** 点 **Deploy image**，选择刚批准的镜像。若需要持久化文件，先到 **Volumes** 申请卷并等到 **Ready**，再在应用表单启用 **Use persistent storage**，选择未占用的卷。一个卷同一时间只能用于一个应用、一个运行副本。试点卷目前只有一个在线副本，重要文件请另外保留备份。
+如果已有**预构建镜像**：进入 **My images**，可以填写公开镜像引用并点击 **Inspect image**，也可以点击 **Upload image** 上传本机 `docker save` 生成的 `.tar`。归档最多 1 GiB，须包含一张 `linux/amd64` 镜像。等到 **Approved**。High 漏洞仍显示在 Trivy 报告中，但不阻止部署；Critical、Unknown 或无法识别的严重度会阻止部署。若显示 **Rejected**，可用 **View report** 查看或 **Download JSON** 下载漏洞报告；若显示 **Failed**，可点 **View failure** 查看并下载扫描错误摘要，此时没有漏洞报告。然后进入 **New app**，按镜像内程序的真实监听端口和资源创建草稿；到 **Overview** 点 **Deploy image**，选择刚批准的镜像。若需要持久化文件，先到 **Volumes** 申请卷并等到 **Ready**，再在应用表单启用 **Use persistent storage**，选择未占用的卷。一个卷同一时间只能用于一个应用、一个运行副本。试点卷目前只有一个在线副本，重要文件请另外保留备份。
 
 ![My images 页面](../web/public/guide-03-my-images.png)
 

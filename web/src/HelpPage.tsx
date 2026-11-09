@@ -17,7 +17,7 @@ export default function HelpPage() {
     <Card className="form-card" title="Deploy a container image" style={{ marginBottom: 20 }}>
       <ol>
         <li>Open <Link to="/images">My images</Link>. Inspect a public image reference or upload a local <Text code>docker save</Text> tar containing one <Text code>linux/amd64</Text> image (up to 1 GiB).</li>
-        <li>Wait until the image is <Text strong>Approved</Text>. For a rejected scan, use <Text strong>View report</Text> or <Text strong>Download JSON</Text> to see Trivy findings.</li>
+        <li>Wait until the image is <Text strong>Approved</Text>. High findings remain visible but do not block deployment; Critical, Unknown and unrecognized findings do. For <Text strong>Rejected</Text>, use <Text strong>View report</Text> or <Text strong>Download JSON</Text>. For <Text strong>Failed</Text>, use <Text strong>View failure</Text> to inspect and download the scan error summary.</li>
         <li>Open <Link to="/apps/new">New app</Link>. Enter an app name, the port your container listens on, and its resources. Select <Text strong>Create draft</Text>.</li>
         <li>On <Link to="/">Overview</Link>, select <Text strong>Deploy image</Text> and choose your approved image. When the app is <Text strong>Running</Text>, select <Text strong>Open app</Text>.</li>
       </ol>
