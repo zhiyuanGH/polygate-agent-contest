@@ -101,8 +101,34 @@ pre{background:#f7f2f3;padding:14px;overflow:auto}pre code{background:none;paddi
 </tbody>
 </table>
 <p>For your own ZIP, place <code>main.py</code> at the ZIP root for the Python template, <code>package.json</code> and <code>package-lock.json</code> there for the Node.js template, or a <code>Dockerfile</code> there for <strong>Use my Dockerfile</strong>. Enter the port your app actually listens on as <strong>App port</strong>. Your app must listen on <code>0.0.0.0</code>; a Dockerfile <code>EXPOSE</code> line alone does not make it listen. Enter <strong>HTTP health path</strong> only if your app serves that path successfully. Because your app opens at <code>/&lt;username&gt;/&lt;app-name&gt;/</code>, use relative links for page assets and API calls, or configure your framework's base path to match. Check the full app in a browser after deployment.</p>
-<p>To use a <strong>prebuilt image</strong> instead, open <strong>My images</strong>. Enter a public image address and select <strong>Inspect image</strong>, or select <strong>Upload image</strong> for a local <code>docker save</code> <code>.tar</code>. The file must contain one <code>linux/amd64</code> image and be at most 1 GiB. Wait for <strong>Approved</strong>. If it shows <strong>Rejected</strong>, select <strong>View report</strong> or <strong>Download JSON</strong> for the findings. If it shows <strong>Failed</strong>, select <strong>View failure</strong> for the error details. Then open <strong>New app</strong>, enter the image's listening port and your resource choices, and select <strong>Create draft</strong>. On <strong>Overview</strong>, choose <strong>Deploy image</strong> and select the approved image. For files that must survive a restart, request a volume on <strong>Volumes</strong> and wait for <strong>Ready</strong> before selecting it in the app form. Keep a separate copy of important files.</p>
-<p><img alt="My images page" src="/guide-03-my-images.png" /></p>
+<h2>Alternative: upload a prebuilt image tar</h2>
+<p>Use this route if you already have a container image. If it is in a public registry allowed by PolyGate, enter its address under <strong>Inspect an image</strong> and select <strong>Inspect image</strong>; continue from step 3 below.</p>
+<ol>
+<li>Save your local image as a tar archive, for example <code>docker save -o my-agent.tar my-agent:latest</code>. The tar must contain <strong>one <code>linux/amd64</code> image</strong> and be at most <strong>1 GiB</strong>. Open <strong>My images</strong>; the <strong>Upload an image tar</strong> card appears below <strong>Inspect an image</strong>.</li>
+</ol>
+<p><img alt="My images page with the image tar upload card" src="/guide-03-my-images.png" /></p>
+<ol>
+<li>In <strong>Upload an image tar</strong>, choose your <code>.tar</code> file. Check the selected filename, then select <strong>Upload image</strong> once. Wait for the upload and import to finish before leaving the page. The file chooser label may follow your computer's language.</li>
+</ol>
+<p><img alt="A tar file selected and ready to upload" src="/guide-24-image-tar-selected.png" /></p>
+<ol>
+<li>In <strong>Inspection history</strong>, find the image row and wait for <strong>Approved</strong>. Only an approved image can be deployed. You can select <strong>View report</strong> to inspect findings or <strong>Download JSON</strong> to save the full report. If the row says <strong>Rejected</strong>, open the report to see the blocking findings. If it says <strong>Failed</strong>, select <strong>View failure</strong> to see why inspection did not complete.</li>
+</ol>
+<p><img alt="Uploaded image approved in Inspection history" src="/guide-26-image-approved.png" /></p>
+<p><img alt="The image inspection report" src="/guide-27-image-scan-report.png" /></p>
+<ol>
+<li>Select the copy icon next to <strong>Submitted image</strong>, then open <strong>New app</strong>. Enter a unique lowercase <strong>App name</strong>, paste the copied reference into <strong>Proposed image reference</strong>, and set <strong>App port</strong> to the port your image actually listens on. Leave <strong>HTTP health path</strong> empty unless the app serves a working health endpoint. Choose CPU, memory and replicas, then select <strong>Save draft</strong>. For files that must survive a restart, first request a volume on <strong>Volumes</strong>, wait for <strong>Ready</strong>, and select it in this form. Keep a separate copy of important files.</li>
+</ol>
+<p><img alt="New app draft with the image reference and listening port" src="/guide-28-image-app-draft-form.png" /></p>
+<p><img alt="Resource settings and Save draft button" src="/guide-28b-image-app-save-draft.png" /></p>
+<ol>
+<li>On <strong>Overview</strong>, find the new draft and select <strong>Deploy image</strong>. Choose the approved image in the dialog and select <strong>Deploy image</strong> again. PolyGate deploys the image chosen in this dialog using the draft's saved port and resources.</li>
+</ol>
+<p><img alt="Choosing an approved image for the draft" src="/guide-29-image-deploy-selection.png" /></p>
+<ol>
+<li>Wait for <strong>Running</strong>, then select <strong>Open app</strong>. Check the whole page and its links at <code>https://apps.polylink.org/&lt;username&gt;/&lt;app-name&gt;/</code>; your own image may need a matching base path. Use <strong>Logs</strong> if the app does not become Running.</li>
+</ol>
+<p><img alt="Running app created from an uploaded image" src="/guide-30-image-app-running.png" /></p>
 <p><img alt="Volumes page" src="/guide-06-volumes.png" /></p>
 <p>If a step fails, note the app name, build submission time and visible error, then check <strong>Build history → View log</strong> or <strong>Overview → Logs</strong>. Contact the laboratory operator with those details. Do not send passwords or API keys in screenshots or logs.</p>
 <p>If the ZIP build succeeds but the app becomes <strong>Failed</strong> with <code>connection refused</code> events, check <strong>App port</strong>. The Python template uses <strong>8000</strong>, Node.js uses <strong>3000</strong>, and the Dockerfile sample uses <strong>8080</strong>. On <strong>Overview</strong>, choose <strong>Edit port</strong> for the failed app, enter the correct listening port, save, then choose <strong>Deploy image</strong> and select the same approved image. Leave the HTTP health path empty unless your app serves that path successfully. This keeps the app and its build history; you do not need to upload the ZIP again.</p>

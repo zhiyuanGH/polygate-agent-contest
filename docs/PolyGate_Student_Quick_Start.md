@@ -8,7 +8,7 @@ Open **https://polygate.polylink.org/** and select **Sign in**. Enter the accoun
 
 1. Open **My images**. Enter a public container image reference and select **Inspect image**, or select **Upload image** to submit a local `docker save` `.tar` containing one `linux/amd64` image (up to 1 GiB).
 2. Wait for **Approved**. If the result is **Rejected**, select **View report** or **Download JSON** to see why. If it is **Failed**, select **View failure** for the error details. Only approved images can be deployed.
-3. Open **New app**. Enter a name and the port on which your container listens. Set the CPU, memory and replica count, then select **Create draft**.
+3. Open **New app**. Enter a name and the port on which your container listens. Set the CPU, memory and replica count, then select **Save draft**.
 4. On **Overview**, choose **Deploy image** for that draft and select the approved image. Wait until the app shows **Running**, then choose **Open app**.
 
 **App port** is the HTTP server's listening port inside the container, not a browser URL or host port. Your application must listen on `0.0.0.0` at that port. The samples use Python `8000`, Node.js `3000`, and Dockerfile `8080`; your own image may differ. A Dockerfile `EXPOSE` line does not confirm what port the process actually uses. If the app has a health endpoint returning HTTP 2xx or 3xx, enter its path in **HTTP health path**; otherwise leave the field empty to use the default TCP check. The maximum memory setting is **4096 MiB (4 GiB)** per container. Deployment can be refused when your account or the shared cluster capacity is full.

@@ -154,6 +154,10 @@ func TestTrustedWorkloadUsesPlatformDigestAndRestrictedPod(t *testing.T) {
 			t.Fatalf("missing workload safety constraint %s", required)
 		}
 	}
+	pod := list.Items[0]["spec"].(Object)["template"].(Object)["spec"].(Object)
+	if pod["nodeSelector"].(Object)["kubernetes.io/arch"] != "amd64" {
+		t.Fatal("linux/amd64 student image could be scheduled on another architecture")
+	}
 	if strings.Contains(text, "hostNetwork") || strings.Contains(text, "hostPath") || strings.Contains(text, "privileged") {
 		t.Fatal("workload contains host access")
 	}
@@ -184,18 +188,20 @@ func TestWorkloadPublishesReadableRouteAliasOnService(t *testing.T) {
 	spec := domain.AppSpec{Name: "test-agent-1", Image: "ignored.example/app:v1", Port: 8080,
 		Resources: domain.Resources{CPURequestMilli: 250, CPULimitMilli: 1000, MemoryMiB: 1024, Replicas: 1}}
 	digest := "registry.example/approved/agent@sha256:" + strings.Repeat("a", 64)
-	list, err := TrustedWorkload(accountA, appID, spec, digest, "student-a")
-	if err != nil {
-		t.Fatal(err)
-	}
-	service := list.Items[1]["metadata"].(Object)
-	annotations := service["annotations"].(Object)
-	if annotations["polygate.io/route-username"] != "student-a" ||
-		annotations["polygate.io/route-app-name"] != "test-agent-1" {
-		t.Fatalf("readable route metadata differs: %+v", annotations)
-	}
-	if _, present := list.Items[0]["metadata"].(Object)["annotations"]; present {
-		t.Fatal("route alias must not mutate deployment metadata")
+	for _, username := range []string{"student-a", "26141378", "24021919d"} {
+		list, err := TrustedWorkload(accountA, appID, spec, digest, username)
+		if err != nil {
+			t.Fatal(err)
+		}
+		service := list.Items[1]["metadata"].(Object)
+		annotations := service["annotations"].(Object)
+		if annotations["polygate.io/route-username"] != username ||
+			annotations["polygate.io/route-app-name"] != "test-agent-1" {
+			t.Fatalf("readable route metadata differs: %+v", annotations)
+		}
+		if _, present := list.Items[0]["metadata"].(Object)["annotations"]; present {
+			t.Fatal("route alias must not mutate deployment metadata")
+		}
 	}
 }
 

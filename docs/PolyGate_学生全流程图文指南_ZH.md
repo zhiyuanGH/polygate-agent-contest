@@ -112,9 +112,37 @@
 
 提交自己的源码时，Python 模板的 `main.py`、Node.js 模板的 `package.json` 和 `package-lock.json`，或自定义方式的 `Dockerfile`，都应放在 ZIP 根目录。把程序实际监听的端口填入 **App port**；程序应监听 `0.0.0.0`，仅在 Dockerfile 中写 `EXPOSE` 不会让程序自动监听。只有应用确实提供可访问的健康检查地址时，才填写 **HTTP health path**。作品将部署在 `/<username>/<app-name>/` 下，页面资源和 API 请求请使用相对路径，或为所用框架设置对应基础路径；部署后请在浏览器完整检查页面功能。
 
-如果已有**构建好的镜像**，进入 **My images**：填写公开镜像地址并点击 **Inspect image**，或点击 **Upload image** 上传本机 `docker save` 生成的 `.tar`。文件最多 1 GiB，须包含一张 `linux/amd64` 镜像。等待状态变为 **Approved**；如果是 **Rejected**，点击 **View report** 或 **Download JSON** 查看原因；如果是 **Failed**，点击 **View failure** 查看错误。然后进入 **New app**，填写程序实际监听的端口和资源，点击 **Create draft**；回到 **Overview**，点击 **Deploy image** 并选择刚批准的镜像。若需要保留文件，先到 **Volumes** 申请卷并等到 **Ready**，再在应用表单里选择该卷。重要文件请另行备份。
+## 另一种方式：上传已构建的镜像 tar
 
-![My images 页面](../web/public/guide-03-my-images.png)
+如果已经有容器镜像，可以按这条流程操作。若镜像位于平台允许的公开仓库，也可以在 **Inspect an image** 填入地址并点击 **Inspect image**，然后从下面第 3 步继续。
+
+1. 先把本机镜像保存为 tar，例如 `docker save -o my-agent.tar my-agent:latest`。tar 最多 **1 GiB**，须包含**一张 `linux/amd64` 镜像**。进入 **My images**；**Upload an image tar** 在 **Inspect an image** 下方。
+
+   ![My images 中的镜像 tar 上传区域](../web/public/guide-03-my-images.png)
+
+2. 在 **Upload an image tar** 中选择 `.tar` 文件，核对显示的文件名，再点击一次 **Upload image**。等上传和导入结束后再离开页面。文件选择按钮可能随你的电脑语言显示。
+
+   ![已选择 tar 文件，可以点击 Upload image](../web/public/guide-24-image-tar-selected.png)
+
+3. 到 **Inspection history** 找到该镜像，等待状态变为 **Approved**；只有获批镜像可以部署。点击 **View report** 可查看扫描结果，点击 **Download JSON** 可下载完整报告。如果显示 **Rejected**，打开报告查看阻止部署的发现；如果显示 **Failed**，点击 **View failure** 查看检查失败原因。
+
+   ![上传的镜像已获 Approved](../web/public/guide-26-image-approved.png)
+
+   ![镜像检查报告窗口](../web/public/guide-27-image-scan-report.png)
+
+4. 点击 **Submitted image** 旁的复制图标，再进入 **New app**。填写唯一的小写 **App name**，把复制的地址贴入 **Proposed image reference**，并在 **App port** 填写镜像内程序实际监听的端口。只有程序提供可用的健康检查地址时才填写 **HTTP health path**。选好 CPU、内存、副本数后，点击 **Save draft**。如需重启后保留文件，请先到 **Volumes** 申请卷，等到 **Ready** 再在此表单中选用；重要文件还应自行备份。
+
+   ![填写应用名、镜像地址和程序端口](../web/public/guide-28-image-app-draft-form.png)
+
+   ![资源设置与 Save draft 按钮](../web/public/guide-28b-image-app-save-draft.png)
+
+5. 回到 **Overview**，找到刚保存的草稿，点击 **Deploy image**。在弹窗中选择刚获批的镜像，再点击 **Deploy image**。实际部署的是弹窗里选中的镜像，端口和资源沿用草稿设置。
+
+   ![为草稿选择获批镜像](../web/public/guide-29-image-deploy-selection.png)
+
+6. 等应用显示 **Running**，点击 **Open app**。在 `https://apps.polylink.org/<username>/<app-name>/` 检查完整页面和链接；自己的镜像可能需要设置对应基础路径。如果一直无法 Running，点击 **Logs** 查看原因。
+
+   ![已上传镜像创建的应用正在运行](../web/public/guide-30-image-app-running.png)
 
 ![Volumes 页面](../web/public/guide-06-volumes.png)
 

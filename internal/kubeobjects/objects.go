@@ -23,7 +23,7 @@ func (l List) JSON() ([]byte, error) { return json.MarshalIndent(l, "", "  ") }
 
 var accountPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 var digestPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._:/-]+@sha256:[0-9a-f]{64}$`)
-var routeAliasSegmentPattern = regexp.MustCompile(`^[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$`)
+var routeAliasSegmentPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`)
 
 func ValidatePlatformDigest(image string) error {
 	if !digestPattern.MatchString(image) {
@@ -279,7 +279,7 @@ func workload(accountID, appID string, spec domain.AppSpec, platformImageDigest 
 		container["env"] = env
 	}
 	pod := Object{"serviceAccountName": "app-runtime", "automountServiceAccountToken": false,
-		"nodeSelector":    Object{"node-role.kubernetes.io/worker": ""},
+		"nodeSelector":    Object{"node-role.kubernetes.io/worker": "", "kubernetes.io/arch": "amd64"},
 		"securityContext": Object{"runAsNonRoot": true, "runAsUser": 65532, "runAsGroup": 65532, "seccompProfile": Object{"type": "RuntimeDefault"}},
 		"containers":      []Object{container}, "volumes": []Object{{"name": "tmp", "emptyDir": Object{"sizeLimit": "256Mi"}}}}
 	if spec.Persistent {

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, Button, Card, Input, Modal, Popconfirm, Progress, Space, Spin, Table, Tag, Typography, message } from 'antd'
 import { Link } from 'react-router-dom'
 import { api, type ImageArtifact } from './api'
+import { DisabledReason, HelpHint } from './HelpHint'
 
 const { Title, Text, Paragraph } = Typography
 const scanFinished = (item: ImageArtifact) => item.scanStatus !== 'PendingScan'
@@ -77,12 +78,15 @@ export default function ImagePage() {
     onError: (error: Error) => toast.error(error.message) })
   const failure = useMutation({ mutationFn: api.imageScanFailure,
     onError: (error: Error) => toast.error(error.message) })
+  const uploadDisabledReason = !archive ? 'Select a Docker image .tar file first.'
+    : !archive.name.toLowerCase().endsWith('.tar') ? 'Choose a .tar created by docker save.'
+      : archive.size > 1024 * 1024 * 1024 ? 'The archive is over the 1 GiB upload limit.' : undefined
   const harborReport = report.data?.[harborReportType] as Record<string, unknown> | undefined
   const vulnerabilities = Array.isArray(harborReport?.vulnerabilities)
     ? harborReport.vulnerabilities as Record<string, unknown>[] : []
   const columns = [
     { title: 'Submitted image', dataIndex: 'submittedReference', key: 'submittedReference', render: (value: string) => <Text className="image-reference" copyable={{ text: value }}>{value}</Text> },
-    { title: 'Security check', key: 'scan', render: (_: unknown, item: ImageArtifact) => <Space direction="vertical" size={2}>
+    { title: <span>Security check <HelpHint title="Security check">Approved images can be deployed. If an image is Rejected, select View report to see the findings. If inspection Failed, select View failure and try submitting again after addressing the reason.</HelpHint></span>, key: 'scan', render: (_: unknown, item: ImageArtifact) => <Space direction="vertical" size={2}>
       <Tag color={item.scanStatus === 'Approved' ? 'green' : item.scanStatus === 'Rejected' || item.scanStatus === 'Failed' ? 'red' : 'blue'}>{scanLabel(item)}</Tag>
       {scanDetails(item) && <Text type="secondary" className="scan-details">{scanDetails(item)}</Text>}
     </Space> },
@@ -99,27 +103,28 @@ export default function ImagePage() {
       </>}
       <Popconfirm title="Remove this image?" description="Images used by an app cannot be removed. Build history will remain, but its image can no longer be deployed."
         okText="Remove" cancelText="Keep" onConfirm={() => remove.mutate(item.id)}>
-        <Button size="small" danger disabled={item.scanStatus === 'PendingScan' || remove.isPending}>Remove</Button>
+        <DisabledReason reason={item.scanStatus === 'PendingScan' ? 'Wait for the security check to finish before removing this image.' : undefined}><Button size="small" danger disabled={item.scanStatus === 'PendingScan' || remove.isPending}>Remove</Button></DisabledReason>
       </Popconfirm>
     </Space> },
   ]
   return <>
     {context}
     <div className="page-heading"><div><span className="eyebrow">CONTAINER IMAGES</span><Title level={2}>My images</Title><Paragraph type="secondary">Upload a Docker image tar or submit a registry reference. PolyGate stores the image privately and checks it before deployment.</Paragraph></div></div>
-    {!me.data?.imageDeploymentAvailable && <Alert type="info" showIcon className="image-access-note" message="Image deployment is not enabled for this account" description="You may inspect images, but only pilot accounts can deploy approved images at this stage." />}
-    {me.data?.mode === 'authenticated' ? <Card className="form-card image-submit-card" title="Inspect an image">
-      <Space.Compact className="image-submit-row"><Input aria-label="Container image reference" value={reference} maxLength={512} placeholder="registry-1.docker.io/library/my-agent:1.0" onChange={event => setReference(event.target.value)} onPressEnter={() => { if (reference.trim()) inspect.mutate(reference.trim()) }} /><Button type="primary" loading={inspect.isPending} disabled={!reference.trim()} onClick={() => inspect.mutate(reference.trim())}>Inspect image</Button></Space.Compact>
+    {!me.data?.imageDeploymentAvailable && <Alert type="info" showIcon className="image-access-note" message="Image deployment is not enabled for this account" description="You may inspect images, but cannot deploy them until a platform administrator enables image deployment for your account." />}
+    {me.data?.mode === 'authenticated' ? <Card className="form-card image-submit-card" title={<span>Inspect an image <HelpHint title="Image reference">If your image is already in a container registry, enter its full address and tag, for example registry-1.docker.io/library/nginx:stable. The image must pass the security check before deployment.</HelpHint></span>}>
+      <Space.Compact className="image-submit-row"><Input aria-label="Container image reference" value={reference} maxLength={512} placeholder="registry-1.docker.io/library/my-agent:1.0" onChange={event => setReference(event.target.value)} onPressEnter={() => { if (reference.trim()) inspect.mutate(reference.trim()) }} /><DisabledReason reason={!reference.trim() ? 'Enter an image reference first.' : undefined}><Button type="primary" loading={inspect.isPending} disabled={!reference.trim()} onClick={() => inspect.mutate(reference.trim())}>Inspect image</Button></DisabledReason></Space.Compact>
       <Paragraph type="secondary" className="image-help">Use a registry allowed by the platform. Only images marked Approved can be selected for deployment.</Paragraph>
     </Card> : <Alert type="info" showIcon message="Sign in to inspect images" />}
-    {me.data?.imageDeploymentAvailable && <Card className="form-card image-submit-card" title="Upload an image tar" style={{ marginTop: 20 }}>
+    {me.data?.imageDeploymentAvailable && <Card className="form-card image-submit-card" title={<span>Upload an image tar <HelpHint title="Docker image tar">A Docker image tar is made with docker save. It is different from a source ZIP or a tar of project files. Build the image for linux/amd64 before saving it.</HelpHint></span>} style={{ marginTop: 20 }}>
       <Paragraph type="secondary">Run <code>docker save -o my-agent.tar my-agent:latest</code>, then select the tar file here. One linux/amd64 image, at most 1 GiB.</Paragraph>
       <input aria-label="Docker image tar" type="file" accept=".tar,application/x-tar" disabled={upload.isPending}
         onChange={event => { setArchive(event.target.files?.[0] ?? null); setUploadProgress(0) }} />
-      <div style={{ marginTop: 12 }}><Button type="primary" loading={upload.isPending}
+      <div style={{ marginTop: 12 }}><DisabledReason reason={uploadDisabledReason}><Button type="primary" loading={upload.isPending}
         disabled={!archive || !archive.name.toLowerCase().endsWith('.tar') || archive.size > 1024 * 1024 * 1024}
-        onClick={() => { if (archive) upload.mutate(archive) }}>Upload image</Button></div>
+        onClick={() => { if (archive) upload.mutate(archive) }}>Upload image</Button></DisabledReason></div>
       {upload.isPending && <><Progress percent={uploadProgress} style={{ marginTop: 12 }} /><Text type="secondary">{uploadProgress === 100 ? 'Importing into the private registry…' : 'Uploading in 8 MiB parts…'}</Text></>}
       {archive && archive.size > 1024 * 1024 * 1024 && <Alert type="error" showIcon message="Archive exceeds 1 GiB" style={{ marginTop: 12 }} />}
+      {archive && !archive.name.toLowerCase().endsWith('.tar') && <Alert type="warning" showIcon message="Choose a docker save .tar file" style={{ marginTop: 12 }} />}
     </Card>}
     <Card className="apps-card" title="Inspection history" extra={<Space><Button size="small" loading={images.isFetching} onClick={() => void images.refetch()} disabled={me.data?.mode !== 'authenticated'}>Refresh</Button>{me.data?.imageDeploymentAvailable && <Link to="/apps/new">Create an app</Link>}</Space>}>
       {images.isPending && me.data?.mode === 'authenticated' ? <div className="center"><Spin /></div> : images.error ? <Alert type="error" showIcon message="Could not load images" description={images.error.message} /> : <Table<ImageArtifact> rowKey="id" columns={columns} dataSource={images.data ?? []} pagination={{ pageSize: 10 }} locale={{ emptyText: 'No images submitted yet.' }} />}

@@ -219,9 +219,31 @@ export type ImageArtifact = {
 
 export type ImageScanFailure = { artifactId: string; status: 'Failed'; errorCode: string; attempts: number; checkedAt: string; summary: string }
 
+const errorHelp: Record<string, string> = {
+  APP_NAME_TAKEN: 'Choose another app name, or update the existing app from Overview.',
+  APP_NOT_DEPLOYABLE: 'Check the app status on Overview, then retry from a draft or stopped app.',
+  BUILD_NOT_ENABLED: 'Ask a platform administrator to enable source builds for your account.',
+  BUILD_QUEUE_FULL: 'Wait for a running build to finish, then submit again.',
+  IMAGE_ARTIFACT_LIMIT: 'Remove an unused image from My images before submitting another.',
+  IMAGE_NOT_APPROVED: 'Open My images and choose an image marked Approved.',
+  IMAGE_SCAN_IN_PROGRESS: 'Wait for the security check to finish, then refresh My images.',
+  IMAGE_STILL_IN_USE: 'Stop and delete the app using this image before removing it.',
+  INVALID_PORT: 'Enter the HTTP port your program listens on inside the container.',
+  INVALID_SOURCE: 'Check the ZIP layout and selected build method, then submit the ZIP again.',
+  QUOTA_EXCEEDED: 'Reduce CPU, memory or replicas, or remove an unused app.',
+  GLOBAL_QUOTA_EXCEEDED: 'The cluster is at capacity. Try again later or contact the lab administrator.',
+  SOURCE_STORAGE_FULL: 'Remove unused source build files or ask the lab administrator for space.',
+  TASK_BUSY: 'Another change is still running. Wait for it to finish, then retry.',
+  VOLUME_ALREADY_BOUND: 'Choose another Ready volume; one volume can be attached to one app at a time.',
+  VOLUME_NOT_READY: 'Wait until the volume shows Ready on the Volumes page.',
+  VOLUME_QUOTA_EXCEEDED: 'Delete an unused volume or request a smaller size. Deleting volumes count until removal finishes.',
+}
+
+export function errorGuidance(code: string): string | undefined { return errorHelp[code] }
+
 export class ApiError extends Error {
   constructor(public code: string, public field: string | undefined, message: string) {
-    super(message)
+    super(errorHelp[code] ? `${message} ${errorHelp[code]}` : message)
   }
 }
 

@@ -101,8 +101,34 @@ pre{background:#f7f2f3;padding:14px;overflow:auto}pre code{background:none;paddi
 </tbody>
 </table>
 <p>提交自己的源码时，Python 模板的 <code>main.py</code>、Node.js 模板的 <code>package.json</code> 和 <code>package-lock.json</code>，或自定义方式的 <code>Dockerfile</code>，都应放在 ZIP 根目录。把程序实际监听的端口填入 <strong>App port</strong>；程序应监听 <code>0.0.0.0</code>，仅在 Dockerfile 中写 <code>EXPOSE</code> 不会让程序自动监听。只有应用确实提供可访问的健康检查地址时，才填写 <strong>HTTP health path</strong>。作品将部署在 <code>/&lt;username&gt;/&lt;app-name&gt;/</code> 下，页面资源和 API 请求请使用相对路径，或为所用框架设置对应基础路径；部署后请在浏览器完整检查页面功能。</p>
-<p>如果已有<strong>构建好的镜像</strong>，进入 <strong>My images</strong>：填写公开镜像地址并点击 <strong>Inspect image</strong>，或点击 <strong>Upload image</strong> 上传本机 <code>docker save</code> 生成的 <code>.tar</code>。文件最多 1 GiB，须包含一张 <code>linux/amd64</code> 镜像。等待状态变为 <strong>Approved</strong>；如果是 <strong>Rejected</strong>，点击 <strong>View report</strong> 或 <strong>Download JSON</strong> 查看原因；如果是 <strong>Failed</strong>，点击 <strong>View failure</strong> 查看错误。然后进入 <strong>New app</strong>，填写程序实际监听的端口和资源，点击 <strong>Create draft</strong>；回到 <strong>Overview</strong>，点击 <strong>Deploy image</strong> 并选择刚批准的镜像。若需要保留文件，先到 <strong>Volumes</strong> 申请卷并等到 <strong>Ready</strong>，再在应用表单里选择该卷。重要文件请另行备份。</p>
-<p><img alt="My images 页面" src="/guide-03-my-images.png" /></p>
+<h2>另一种方式：上传已构建的镜像 tar</h2>
+<p>如果已经有容器镜像，可以按这条流程操作。若镜像位于平台允许的公开仓库，也可以在 <strong>Inspect an image</strong> 填入地址并点击 <strong>Inspect image</strong>，然后从下面第 3 步继续。</p>
+<ol>
+<li>先把本机镜像保存为 tar，例如 <code>docker save -o my-agent.tar my-agent:latest</code>。tar 最多 <strong>1 GiB</strong>，须包含<strong>一张 <code>linux/amd64</code> 镜像</strong>。进入 <strong>My images</strong>；<strong>Upload an image tar</strong> 在 <strong>Inspect an image</strong> 下方。</li>
+</ol>
+<p><img alt="My images 中的镜像 tar 上传区域" src="/guide-03-my-images.png" /></p>
+<ol>
+<li>在 <strong>Upload an image tar</strong> 中选择 <code>.tar</code> 文件，核对显示的文件名，再点击一次 <strong>Upload image</strong>。等上传和导入结束后再离开页面。文件选择按钮可能随你的电脑语言显示。</li>
+</ol>
+<p><img alt="已选择 tar 文件，可以点击 Upload image" src="/guide-24-image-tar-selected.png" /></p>
+<ol>
+<li>到 <strong>Inspection history</strong> 找到该镜像，等待状态变为 <strong>Approved</strong>；只有获批镜像可以部署。点击 <strong>View report</strong> 可查看扫描结果，点击 <strong>Download JSON</strong> 可下载完整报告。如果显示 <strong>Rejected</strong>，打开报告查看阻止部署的发现；如果显示 <strong>Failed</strong>，点击 <strong>View failure</strong> 查看检查失败原因。</li>
+</ol>
+<p><img alt="上传的镜像已获 Approved" src="/guide-26-image-approved.png" /></p>
+<p><img alt="镜像检查报告窗口" src="/guide-27-image-scan-report.png" /></p>
+<ol>
+<li>点击 <strong>Submitted image</strong> 旁的复制图标，再进入 <strong>New app</strong>。填写唯一的小写 <strong>App name</strong>，把复制的地址贴入 <strong>Proposed image reference</strong>，并在 <strong>App port</strong> 填写镜像内程序实际监听的端口。只有程序提供可用的健康检查地址时才填写 <strong>HTTP health path</strong>。选好 CPU、内存、副本数后，点击 <strong>Save draft</strong>。如需重启后保留文件，请先到 <strong>Volumes</strong> 申请卷，等到 <strong>Ready</strong> 再在此表单中选用；重要文件还应自行备份。</li>
+</ol>
+<p><img alt="填写应用名、镜像地址和程序端口" src="/guide-28-image-app-draft-form.png" /></p>
+<p><img alt="资源设置与 Save draft 按钮" src="/guide-28b-image-app-save-draft.png" /></p>
+<ol>
+<li>回到 <strong>Overview</strong>，找到刚保存的草稿，点击 <strong>Deploy image</strong>。在弹窗中选择刚获批的镜像，再点击 <strong>Deploy image</strong>。实际部署的是弹窗里选中的镜像，端口和资源沿用草稿设置。</li>
+</ol>
+<p><img alt="为草稿选择获批镜像" src="/guide-29-image-deploy-selection.png" /></p>
+<ol>
+<li>等应用显示 <strong>Running</strong>，点击 <strong>Open app</strong>。在 <code>https://apps.polylink.org/&lt;username&gt;/&lt;app-name&gt;/</code> 检查完整页面和链接；自己的镜像可能需要设置对应基础路径。如果一直无法 Running，点击 <strong>Logs</strong> 查看原因。</li>
+</ol>
+<p><img alt="已上传镜像创建的应用正在运行" src="/guide-30-image-app-running.png" /></p>
 <p><img alt="Volumes 页面" src="/guide-06-volumes.png" /></p>
 <p>若任一步失败，记下应用名、提交时间和页面错误，到 <strong>Build history → View log</strong> 或 <strong>Overview → Logs</strong> 查看，再把这些信息交给实验室管理员。不要把密码或 API Key 放进截图、源码或日志。</p>
 <p>如果 ZIP 构建成功，但应用显示 <strong>Failed</strong>，事件里有 <code>connection refused</code>，先核对 <strong>App port</strong>：Python 模板是 <strong>8000</strong>，Node.js 模板是 <strong>3000</strong>，Dockerfile 示例是 <strong>8080</strong>。在 <strong>Overview</strong> 找到失败应用，点击 <strong>Edit port</strong>，填入程序实际监听的端口并保存；随后点击 <strong>Deploy image</strong>，选择同一张已批准镜像重新部署。除非应用确实提供对应接口，否则 HTTP 健康检查路径先留空。这样可以保留原应用和构建记录，不必重新上传 ZIP。</p>

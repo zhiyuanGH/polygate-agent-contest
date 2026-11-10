@@ -73,6 +73,9 @@ func TestAccountProvisionRequiresAdminAndReturnsPasswordOnce(t *testing.T) {
 	if w := call(createPath, `{"username":"bad name","displayName":"Student","reason":"Contest enrollment"}`); w.Code != http.StatusBadRequest || store.claimed != 0 {
 		t.Fatalf("invalid username: %d", w.Code)
 	}
+	if !studentUsername.MatchString("26141378") || !studentUsername.MatchString("24021919d") {
+		t.Fatal("student IDs must be accepted as usernames")
+	}
 	w := call(createPath, createBody)
 	if w.Code != http.StatusCreated || store.claimed != 1 || store.finished != 1 || manager.created != 1 || manager.enabled != 1 {
 		t.Fatalf("creation: %d %s", w.Code, w.Body.String())

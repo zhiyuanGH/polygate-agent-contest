@@ -109,6 +109,28 @@ func TestReadableAliasUsesManagedServiceAndKeepsIDRoute(t *testing.T) {
 	}
 }
 
+func TestNumericStudentIDRoute(t *testing.T) {
+	managed := service()
+	managed.Annotations = map[string]string{
+		"polygate.io/route-username": "24021919d", "polygate.io/route-app-name": "demo"}
+	paths, err := ParsePathRoutes("apps.polylink.org:443")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var prefix string
+	gateway := &Gateway{Resolver: NewResolver(fake.NewSimpleClientset(managed)), Access: allowPublic, PathRoutes: paths,
+		Transport: transportFunc(func(req *http.Request) (*http.Response, error) {
+			prefix = req.Header.Get("X-Forwarded-Prefix")
+			return &http.Response{StatusCode: 200, Header: make(http.Header),
+				Body: io.NopCloser(strings.NewReader("ok"))}, nil
+		})}
+	response := httptest.NewRecorder()
+	gateway.ServeHTTP(response, httptest.NewRequest("GET", "https://apps.polylink.org/24021919d/demo/docs", nil))
+	if response.Code != 200 || prefix != "/24021919d/demo" {
+		t.Fatalf("student ID alias failed: status=%d prefix=%s", response.Code, prefix)
+	}
+}
+
 func TestPrivateAppCannotUsePublicOrLegacyRoutes(t *testing.T) {
 	managed := service()
 	managed.Annotations = map[string]string{

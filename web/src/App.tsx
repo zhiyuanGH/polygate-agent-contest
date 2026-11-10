@@ -3,13 +3,14 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { Alert, Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Progress, Select, Space, Spin, Switch, Table, Typography, message } from 'antd'
 import { NavLink, Route, Routes, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ApiError, api, type AccountActualUsage, type App as AppRecord, type AppEvent, type AppSpec, type BuildTemplate, type Me, type Operation, type PodMetric, type Resources, type SourceBuild, type Volume } from './api'
+import { ApiError, api, errorGuidance, type AccountActualUsage, type App as AppRecord, type AppEvent, type AppSpec, type BuildTemplate, type Me, type Operation, type PodMetric, type Resources, type SourceBuild, type Volume } from './api'
 import ImagePage from './ImagePage'
 import AdminAccountsPage from './AdminAccountsPage'
 import AdminResourcesPage from './AdminResourcesPage'
 import AdminAppsPage from './AdminAppsPage'
 import ActivityPage from './ActivityPage'
 import HelpPage from './HelpPage'
+import { DisabledReason, HelpHint } from './HelpHint'
 
 const { Title, Text, Paragraph } = Typography
 
@@ -21,7 +22,7 @@ function newestFirstLines(log: string): string {
 function appAccessURL(base: string, appID: string, routing?: 'host' | 'path', username?: string, appName?: string): string {
   const url = new URL(base)
   if (routing === 'path') {
-    const segment = /^[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/
+    const segment = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
     url.pathname = username && appName && segment.test(username) && segment.test(appName)
       ? `/${username}/${appName}/` : `/${appID}/`
   } else {
@@ -35,7 +36,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation()
   const me = useQuery({ queryKey: ['me'], queryFn: api.me })
   if (me.error instanceof ApiError && me.error.code === 'UNAUTHENTICATED') {
-    return <div className="login-page"><Card className="login-card"><div className="brand-mark"><img src="/polyu-logo.webp" alt="PolyU logo" /></div><Title level={2}>Welcome to PolyGate</Title><Paragraph type="secondary">Sign in with your PolyGate student account to continue.</Paragraph><Button type="primary" size="large" onClick={() => { window.location.href = '/auth/login' }}>Sign in</Button></Card></div>
+    return <div className="login-page"><Card className="login-card"><div className="brand-mark"><img src="/polyu-logo.webp" alt="PolyU logo" /></div><Title level={2}>Welcome to PolyGate</Title><Paragraph type="secondary">Sign in with your PolyGate account to continue.</Paragraph><Button type="primary" size="large" onClick={() => { window.location.href = '/auth/login' }}>Sign in</Button></Card></div>
   }
   return <div className="shell">
     <aside className="sidebar">
@@ -114,9 +115,9 @@ function StatusCell({ app, enabled, latestUpdate }: { app: AppRecord; enabled: b
   })
   return <Space direction="vertical" size={0}>
     <span className="draft-pill">{app.status}</span>
-    {details.data?.errorCode && <Text type="secondary" style={{ fontSize: 12 }}>{details.data.errorCode.replaceAll('_', ' ').toLowerCase()}</Text>}
+    {details.data?.errorCode && <Text type="secondary" style={{ fontSize: 12 }}>{details.data.errorCode.replaceAll('_', ' ').toLowerCase()}. {errorGuidance(details.data.errorCode) ?? 'Open Logs for details.'}</Text>}
     {latestUpdate?.state === 'Failed' && <Text type="danger" style={{ fontSize: 12 }}>
-      {latestUpdate.kind === 'RESOURCE_UPDATE_REQUEST' ? 'Resource update failed; previous settings restored' : latestUpdate.kind === 'RESTART_REQUEST' ? 'Restart failed; previous workload restored' : 'Image update failed; previous version restored'}{latestUpdate.detail?.errorCode ? ` (${latestUpdate.detail.errorCode.replaceAll('_', ' ').toLowerCase()})` : ''}.
+      {latestUpdate.kind === 'RESOURCE_UPDATE_REQUEST' ? 'Resource update failed; previous settings restored' : latestUpdate.kind === 'RESTART_REQUEST' ? 'Restart failed; previous workload restored' : 'Image update failed; previous version restored'}{latestUpdate.detail?.errorCode ? ` (${latestUpdate.detail.errorCode.replaceAll('_', ' ').toLowerCase()})` : ''}. {latestUpdate.detail?.errorCode ? errorGuidance(latestUpdate.detail.errorCode) ?? 'Open Logs for details.' : 'Open Logs for details.'}
     </Text>}
   </Space>
 }
@@ -242,7 +243,7 @@ function Overview() {
   ]
   return <>
     {context}
-    <div className="page-heading"><div><span className="eyebrow">STUDENT CONSOLE</span><Title level={2}>{t('title')}</Title><Paragraph type="secondary">{t('intro')}</Paragraph></div><NavLink to="/apps/new"><Button type="primary" size="large">+ {t('newApp')}</Button></NavLink></div>
+    <div className="page-heading"><div><span className="eyebrow">{me.data.role === 'admin' ? 'ADMINISTRATOR CONSOLE' : 'STUDENT CONSOLE'}</span><Title level={2}>{t('title')}</Title><Paragraph type="secondary">{t('intro')}</Paragraph></div><NavLink to="/apps/new"><Button type="primary" size="large">+ {t('newApp')}</Button></NavLink></div>
     {me.data.trustedDeploymentAvailable && <Alert type="info" showIcon style={{ marginBottom: 20 }} message="Trusted sample deployment" description="Deploy sample runs a platform-approved image on port 5678. The image and port entered in your draft are not used for this test." />}
     {me.data.imageDeploymentAvailable && <Alert type="info" showIcon style={{ marginBottom: 20 }} message="Approved image deployment" description="Submit an image on My images, wait for Approved, then choose it when deploying an app. The app's saved resources and port apply." />}
     {sourceArtifactId && <Alert type="info" showIcon style={{ marginBottom: 20 }} message="Approved source build selected" description="Choose Update image on a running app to deploy this build as its next version. The app's existing port and resource settings will apply." />}
@@ -336,7 +337,7 @@ function Overview() {
           { title: 'Object', dataIndex: 'object', key: 'object', ellipsis: true },
           { title: 'Message', dataIndex: 'message', key: 'message', ellipsis: true }]} />
     </Modal>
-    <div className="overview-grid"><ResourceCard me={me.data} fetchedAt={me.dataUpdatedAt} actual={actualUsage.data} actualError={actualUsage.error?.message} volumes={accountVolumes.data} volumeError={accountVolumes.error?.message} volumeFetchedAt={accountVolumes.dataUpdatedAt} /><Card title="Account" className="account-card"><div className="account-badge">LS</div><Title level={4}>{me.data.displayName}</Title><Text type="secondary">Student account</Text><div className="account-line"><span>Account ID</span><code>{me.data.id}</code></div><div className="account-line"><span>Access</span><span>Personal workspace</span></div></Card></div>
+    <div className="overview-grid"><ResourceCard me={me.data} fetchedAt={me.dataUpdatedAt} actual={actualUsage.data} actualError={actualUsage.error?.message} volumes={accountVolumes.data} volumeError={accountVolumes.error?.message} volumeFetchedAt={accountVolumes.dataUpdatedAt} /><Card title="Account" className="account-card"><div className="account-badge">{me.data.role === 'admin' ? 'AD' : 'ST'}</div><Title level={4}>{me.data.displayName}</Title><Text type="secondary">{me.data.role === 'admin' ? 'Administrator account' : 'Student account'}</Text><div className="account-line"><span>Account ID</span><code>{me.data.id}</code></div><div className="account-line"><span>Access</span><span>Personal workspace</span></div></Card></div>
     <Card className="apps-card" title={t('apps')} extra={<NavLink to="/apps/new">Create app</NavLink>}><Table<AppRecord> rowKey="id" columns={columns} dataSource={apps.data} pagination={false} locale={{ emptyText: <div className="empty-table"><div className="empty-icon">▣</div><strong>{t('emptyApps')}</strong><p>Create an app draft to see it here.</p></div> }} /></Card>
   </>
 }
@@ -374,10 +375,11 @@ function NewApp() {
   }, onError: (error: Error) => toast.error(error.message) })
   const persistent = Form.useWatch('persistent', form)
   const newAppName = Form.useWatch('name', form)
-  const readableSegment = /^[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/
+  const usernameSegment = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
+  const appNameSegment = /^[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/
   const publicAppPrefix = me.data?.appAccessRouting === 'path' && me.data.username &&
-    readableSegment.test(me.data.username) && typeof newAppName === 'string' &&
-    readableSegment.test(newAppName) && !newAppName.includes('--')
+    usernameSegment.test(me.data.username) && typeof newAppName === 'string' &&
+    appNameSegment.test(newAppName) && !newAppName.includes('--')
     ? `/${me.data.username}/${newAppName}` : null
   const publicAppURL = publicAppPrefix && me.data?.appAccessBaseURL
     ? new URL(`${publicAppPrefix}/`, me.data.appAccessBaseURL).toString() : null
@@ -392,18 +394,18 @@ function NewApp() {
     {createdDraft && <Alert type="warning" showIcon message="Draft created; deployment needs a retry" description={<NavLink to="/">Open Overview to deploy an approved image to this draft.</NavLink>} />}
     <Card className="form-card">
       <Form<AppSpec> form={form} layout="vertical" initialValues={{ port: sourceArtifactId ? undefined : 8080, persistent: false, resources: { cpuRequestMilli: 250, cpuLimitMilli: 1000, memoryMiB: 1024, replicas: 1 } }} onFinish={values => mutation.mutate(values)}>
-        <div className="form-section"><h3>Application</h3><p>{sourceArtifactId ? 'Choose a short name for the selected approved image.' : 'Choose a short name and enter the proposed image reference. For deployment, select a security approved image from My images.'}</p></div>
+        <div className="form-section"><h3>Application <HelpHint title="Draft and deployment">A draft saves the app name, port and resource settings. To run it, submit an image on My images, wait for Approved, then choose Deploy image on Overview.</HelpHint></h3><p>{sourceArtifactId ? 'Choose a short name for the selected approved image.' : 'Choose a short name and enter the proposed image reference. For deployment, select a security approved image from My images.'}</p></div>
         <div className="form-grid">
-          <Form.Item label={t('appName')} name="name" rules={[{ required: true, pattern: /^[a-z]([a-z0-9-]{0,38}[a-z0-9])?$/, message: 'Use 1–40 lowercase letters, numbers or hyphens.' }]}><Input placeholder="my-agent" maxLength={40} /></Form.Item>
-          <Form.Item label={t('image')} name="image" rules={[{ required: true, message: 'Enter a container image.' }]}><Input placeholder="registry.example.com/my-agent:v1" disabled={sourceArtifactId !== null} /></Form.Item>
+          <Form.Item label={<span>{t('appName')} <HelpHint title="App name">Use a short lowercase name such as my-agent. Your public URL includes this name, so changing it later changes the link.</HelpHint></span>} name="name" rules={[{ required: true, pattern: /^[a-z]([a-z0-9-]{0,38}[a-z0-9])?$/, message: 'Use 1–40 lowercase letters, numbers or hyphens.' }]}><Input placeholder="my-agent" maxLength={40} /></Form.Item>
+          <Form.Item label={<span>{t('image')} <HelpHint title="Image reference">This names the container image you plan to run. A draft does not run yet: submit the image on My images, wait for Approved, then select it for deployment. A source build fills this field automatically.</HelpHint></span>} name="image" rules={[{ required: true, message: 'Enter a container image.' }]}><Input placeholder="registry.example.com/my-agent:v1" disabled={sourceArtifactId !== null} /></Form.Item>
         </div>
-        <Form.Item label={t('port')} name="port" extra={sourceArtifactId ? 'Container listening port: Python sample 8000, Node.js sample 3000, or the actual port for your Dockerfile app. Enter a number, not a URL.' : 'Enter the HTTP port your process listens on inside the container, not the browser or host port. Bind to 0.0.0.0.'} rules={[{ required: true, message: 'Enter the port your container listens on.' }]}><InputNumber min={1} max={65535} style={{ width: '100%' }} /></Form.Item>
-        <Form.Item label="HTTP health path (optional)" name="healthPath"
+        <Form.Item label={<span>{t('port')} <HelpHint title="Container port">This is the number after the colon in your app's listen address, for example 8000 in 0.0.0.0:8000. It is not the public website port. Your program must listen on 0.0.0.0.</HelpHint></span>} name="port" extra={sourceArtifactId ? 'Container listening port: Python sample 8000, Node.js sample 3000, or the actual port for your Dockerfile app. Enter a number, not a URL.' : 'Enter the HTTP port your process listens on inside the container, not the browser or host port. Bind to 0.0.0.0.'} rules={[{ required: true, message: 'Enter the port your container listens on.' }]}><InputNumber min={1} max={65535} style={{ width: '100%' }} /></Form.Item>
+        <Form.Item label={<span>HTTP health path (optional) <HelpHint title="Health path">Leave this empty unless your app has a page such as /health that returns a successful response. PolyGate will otherwise check whether the port is open.</HelpHint></span>} name="healthPath"
           extra="Use a path such as /health only if your app returns HTTP 2xx or 3xx while healthy. When empty, PolyGate checks the TCP port."
           rules={[{ pattern: /^\/(?!\/)(?!.*\.\.)(?:[A-Za-z0-9/_\.~-]*)$/, message: 'Enter an absolute path without spaces, query or fragment.' }, { max: 128 }]}>
           <Input placeholder="/health" maxLength={128} />
         </Form.Item>
-        {me.data?.secretAvailable && <Form.Item label="Environment secrets (optional)" name="secretKeys"
+        {me.data?.secretAvailable && <Form.Item label={<span>Environment secrets (optional) <HelpHint title="API keys and secrets">Save a cloud model API key on the Secrets page, then select its name here. Your app receives it as an environment variable. Do not put the key directly in your source ZIP.</HelpHint></span>} name="secretKeys"
           extra="Only the selected keys are passed to this app as environment variables. Values are never shown in PolyGate."
           rules={[{ type: 'array', max: 8, message: 'Select at most eight keys.' }]}>
           <Select mode="multiple" loading={secrets.isPending} placeholder="Select saved keys" options={(secrets.data ?? []).map(item => ({ value: item.name, label: item.name }))} />
@@ -415,24 +417,24 @@ function NewApp() {
             <div>After deployment, your app will open at <Text code>{publicAppURL}</Text></div>
             <div>Configure your Web framework for <Text code>{publicAppPrefix}</Text>, or use relative asset, API and WebSocket URLs. Root paths such as <Text code>/api</Text> bypass this app.</div>
           </> : <>Enter a valid app name to see its public URL. Your app must support a path prefix under <Text code>/{me.data.username}/&lt;app-name&gt;/</Text>.</>} />}
-        <div className="form-section separated"><h3>Resources</h3><p>Memory request equals memory limit in the first release.</p></div>
+        <div className="form-section separated"><h3>Resources <HelpHint title="CPU, memory and replicas">Start with the defaults. CPU is processing capacity; memory is the RAM limit. A replica is one running copy of your app. Larger values use more of your account quota.</HelpHint></h3><p>Memory request equals memory limit in the first release.</p></div>
         <div className="form-grid">
-          <Form.Item label={t('cpuRequest')} name={['resources', 'cpuRequestMilli']} rules={[{ required: true }]}><InputNumber min={100} max={2000} step={50} style={{ width: '100%' }} /></Form.Item>
-          <Form.Item label={t('cpuLimit')} name={['resources', 'cpuLimitMilli']} rules={[{ required: true }]}><InputNumber min={100} max={2000} step={50} style={{ width: '100%' }} /></Form.Item>
-          <Form.Item label={t('memory')} name={['resources', 'memoryMiB']} rules={[{ required: true }]}><Select options={[128, 256, 512, 1024, 2048, 3072, 4096].map(n => ({ value: n, label: `${n} MiB${n === 4096 ? ' (maximum)' : ''}` }))} /></Form.Item>
-          <Form.Item label={t('replicas')} name={['resources', 'replicas']} rules={[{ required: true }]}><Select options={(persistent ? [1] : [1, 2]).map(n => ({ value: n, label: `${n}` }))} /></Form.Item>
+          <Form.Item label={<span>{t('cpuRequest')} <HelpHint title="CPU request">The processing capacity reserved for your app. Start with 250 mCPU; 1000 mCPU is one CPU core.</HelpHint></span>} name={['resources', 'cpuRequestMilli']} rules={[{ required: true }]}><InputNumber min={100} max={2000} step={50} style={{ width: '100%' }} /></Form.Item>
+          <Form.Item label={<span>{t('cpuLimit')} <HelpHint title="CPU limit">The most CPU your app may use at once. Keep it at or above CPU request. Start with 1000 mCPU.</HelpHint></span>} name={['resources', 'cpuLimitMilli']} rules={[{ required: true }]}><InputNumber min={100} max={2000} step={50} style={{ width: '100%' }} /></Form.Item>
+          <Form.Item label={<span>{t('memory')} <HelpHint title="Memory limit">The maximum RAM available to each running copy of your app. Start with 1024 MiB (about 1 GiB); choose more only if the app needs it.</HelpHint></span>} name={['resources', 'memoryMiB']} rules={[{ required: true }]}><Select options={[128, 256, 512, 1024, 2048, 3072, 4096].map(n => ({ value: n, label: `${n} MiB${n === 4096 ? ' (maximum)' : ''}` }))} /></Form.Item>
+          <Form.Item label={<span>{t('replicas')} <HelpHint title="Replicas">A replica is one running copy of your app. Choose 1 unless you need extra capacity. Apps using a persistent volume must use 1.</HelpHint></span>} name={['resources', 'replicas']} rules={[{ required: true }]}><Select options={(persistent ? [1] : [1, 2]).map(n => ({ value: n, label: `${n}` }))} /></Form.Item>
         </div>
-        {me.data?.volumeAvailable && <Form.Item label={t('persistent')} name="persistent" valuePropName="checked"><Switch onChange={checked => { if (checked) form.setFieldValue(['resources', 'replicas'], 1); else form.setFieldsValue({ volumeId: undefined, mountPath: undefined }) }} /></Form.Item>}
+        {me.data?.volumeAvailable && <Form.Item label={<span>{t('persistent')} <HelpHint title="Keep files after restart">Turn this on only if your app saves files that must survive a restart. Create a volume on the Volumes page first, then select it below.</HelpHint></span>} name="persistent" valuePropName="checked"><Switch onChange={checked => { if (checked) form.setFieldValue(['resources', 'replicas'], 1); else form.setFieldsValue({ volumeId: undefined, mountPath: undefined }) }} /></Form.Item>}
         {me.data?.volumeAvailable && persistent && <>
           <Alert type="info" showIcon style={{ marginBottom: 16 }} message="One app per volume" description="Stopping or deleting the app keeps the volume and its data. Select a ready, unused volume." />
           {volumes.error && <Alert type="error" showIcon message="Could not load volumes" description={volumes.error.message} />}
           <div className="form-grid">
             <Form.Item label="Volume" name="volumeId" rules={[{ required: true, message: 'Select a ready volume.' }]}><Select loading={volumes.isPending} placeholder="Select a ready volume" options={readyVolumes.map(item => ({ value: item.id, label: `${item.spec.name} (${item.spec.sizeGiB} GiB)` }))} /></Form.Item>
-            <Form.Item label="Mount path" name="mountPath" initialValue="/data" rules={[{ required: true, pattern: /^\/(?!proc(?:\/|$)|sys(?:\/|$)|dev(?:\/|$)|tmp(?:\/|$)|run(?:\/|$)|var\/run(?:\/|$))[A-Za-z0-9/_-]+$/, message: 'Use a safe absolute path such as /data.' }]}><Input placeholder="/data" /></Form.Item>
+            <Form.Item label={<span>Mount path <HelpHint title="Mount path">This is the folder inside your app where saved files appear. Use /data unless your program expects another folder.</HelpHint></span>} name="mountPath" initialValue="/data" rules={[{ required: true, pattern: /^\/(?!proc(?:\/|$)|sys(?:\/|$)|dev(?:\/|$)|tmp(?:\/|$)|run(?:\/|$)|var\/run(?:\/|$))[A-Za-z0-9/_-]+$/, message: 'Use a safe absolute path such as /data.' }]}><Input placeholder="/data" /></Form.Item>
           </div>
           {readyVolumes.length === 0 && <Paragraph type="secondary">No unused ready volume. <NavLink to="/volumes">Create a volume</NavLink> and wait until it is ready.</Paragraph>}
         </>}
-        <div className="form-actions"><Space><Button type="primary" htmlType="submit" disabled={createdDraft !== null || (sourceArtifactId !== null && sourceImage?.scanStatus !== 'Approved')} loading={mutation.isPending}>{sourceArtifactId ? 'Create and deploy' : t('createDraft')}</Button><Button onClick={() => navigate('/')}>{t('cancel')}</Button></Space></div>
+        <div className="form-actions"><Space><DisabledReason reason={createdDraft ? 'The draft was saved. Open Overview to deploy it.' : sourceArtifactId && sourceImage?.scanStatus !== 'Approved' ? 'Wait until the selected build image is Approved on My images.' : undefined}><Button type="primary" htmlType="submit" disabled={createdDraft !== null || (sourceArtifactId !== null && sourceImage?.scanStatus !== 'Approved')} loading={mutation.isPending}>{sourceArtifactId ? 'Create and deploy' : t('createDraft')}</Button></DisabledReason><Button onClick={() => navigate('/')}>{t('cancel')}</Button></Space></div>
       </Form>
     </Card>
   </>
@@ -519,25 +521,25 @@ function VolumesPage() {
     { title: 'Actions', key: 'actions', render: (_: unknown, item: Volume) => item.state === 'Ready'
       ? <Space>
           {remaining > 0 && item.spec.sizeGiB < 10 && <Button type="link" onClick={() => { setExpandingVolume(item); setExpandedSize(item.spec.sizeGiB + 1) }}>Expand</Button>}
-          <Button type="link" danger disabled={apps.isPending || boundVolumes.has(item.id)}
-            onClick={() => { setDeletingVolume(item); setDeleteConfirmation('') }}>Delete</Button>
+          <DisabledReason reason={apps.isPending ? 'Checking whether an app uses this volume.' : boundVolumes.has(item.id) ? 'This volume is attached to an app. Delete or detach that app first.' : undefined}><Button type="link" danger disabled={apps.isPending || boundVolumes.has(item.id)}
+            onClick={() => { setDeletingVolume(item); setDeleteConfirmation('') }}>Delete</Button></DisabledReason>
         </Space> : null },
   ]
   if (me.isPending) return <div className="center"><Spin size="large" /></div>
-  if (!me.data?.volumeAvailable) return <Alert type="info" showIcon message="Volumes are not available for this account yet." />
+  if (!me.data?.volumeAvailable) return <Alert type="info" showIcon message="Volumes are not available for this account" description="Ask a platform administrator if your app needs persistent storage. Apps without a volume can still be deployed." />
   return <>
     {context}
     <div className="page-heading"><div><span className="eyebrow">PERSISTENT STORAGE</span><Title level={2}>Your volumes</Title><Paragraph type="secondary">Each account may hold up to two volumes and 10 GiB total. One app can use a volume at a time.</Paragraph></div></div>
     <Alert type="warning" showIcon style={{ marginBottom: 20 }} message="Single-copy pilot storage" description="Volumes currently have one online copy on the .45 server and daily external backups. A server failure can interrupt access; changes since the latest backup may be lost. Keep your own copy of important files." />
     {volumes.error && <Alert type="error" showIcon message="Could not load volumes" description={volumes.error.message} />}
-    <Card className="form-card" title="Request a volume" style={{ marginBottom: 20 }}>
+    <Card className="form-card" title={<span>Request a volume <HelpHint title="Persistent volume">A volume keeps files when your app restarts. Use it only if your app needs to save data between runs. Select it when creating the app and mount it at /data.</HelpHint></span>} style={{ marginBottom: 20 }}>
       <Paragraph type="secondary">A new volume is usable only after its status becomes Ready. Stopping or deleting an app keeps the volume and its data.</Paragraph>
       <Form form={form} layout="vertical" initialValues={{ sizeGiB: 5 }} onFinish={values => creating.mutate(values)}>
         <div className="form-grid">
           <Form.Item label="Name" name="name" rules={[{ required: true, pattern: /^[a-z]([a-z0-9-]{0,38}[a-z0-9])?$/, message: 'Use 1–40 lowercase letters, numbers or hyphens.' }]}><Input placeholder="agent-data" maxLength={40} /></Form.Item>
-          <Form.Item label="Size (GiB)" name="sizeGiB" rules={[{ required: true }]}><InputNumber min={1} max={remaining} style={{ width: '100%' }} /></Form.Item>
+          <Form.Item label={<span>Size (GiB) <HelpHint title="Volume size">GiB is a unit of storage. Your account can hold at most two volumes and 10 GiB in total. A volume can grow later, but cannot shrink.</HelpHint></span>} name="sizeGiB" rules={[{ required: true }]}><InputNumber min={1} max={remaining} style={{ width: '100%' }} /></Form.Item>
         </div>
-        <Button type="primary" htmlType="submit" disabled={items.length >= 2 || remaining < 1 || volumes.isPending} loading={creating.isPending}>Request volume</Button>
+        <DisabledReason reason={volumes.isPending ? 'Loading your current volumes.' : items.length >= 2 ? 'Your account already has two volumes. Delete one before requesting another.' : remaining < 1 ? 'Your account has used all 10 GiB. Delete a volume before requesting another.' : undefined}><Button type="primary" htmlType="submit" disabled={items.length >= 2 || remaining < 1 || volumes.isPending} loading={creating.isPending}>Request volume</Button></DisabledReason>
       </Form>
     </Card>
     <Card className="apps-card" title={`Volumes (${used} / 10 GiB)`}><Table<Volume> rowKey="id" columns={columns} dataSource={items} loading={volumes.isPending} pagination={false} locale={{ emptyText: 'No volumes yet' }} /></Card>
@@ -580,6 +582,9 @@ function SourcePage() {
     enabled: me.data?.mode === 'authenticated' && me.data.sourceBuildAvailable,
     refetchInterval: me.data?.sourceBuildAvailable ? 5000 : false })
   const buildEnabled = me.data?.mode === 'authenticated' && me.data.sourceBuildAvailable
+  const sourceDisabledReason = !file ? 'Select a source ZIP first.'
+    : !file.name.toLowerCase().endsWith('.zip') ? 'Choose a .zip archive of your source files.'
+      : file.size > 100 * 1024 * 1024 ? 'The ZIP exceeds the 100 MiB upload limit.' : undefined
   const images = useQuery({ queryKey: ['images'], queryFn: api.images,
     enabled: buildEnabled, refetchInterval: buildEnabled ? 5000 : false })
   const [selectedBuild, setSelectedBuild] = useState<string | null>(null)
@@ -619,12 +624,12 @@ function SourcePage() {
         ? <Space direction="vertical" size={0}><NavLink to={`/apps/new?artifactId=${encodeURIComponent(item.resultImageArtifactId)}`}>Create and deploy app</NavLink><NavLink to={`/?artifactId=${encodeURIComponent(item.resultImageArtifactId)}`}>Update a running app</NavLink></Space>
         : <NavLink to="/images">View image and security scan</NavLink>
       : item.resultImageDeletedAt ? <Text type="secondary">Image removed</Text>
-        : item.errorCode ? <Text type="danger">{item.errorCode.replaceAll('_', ' ').toLowerCase()}</Text> : '—' },
+      : item.errorCode ? <Space direction="vertical" size={0}><Text type="danger">{item.errorCode.replaceAll('_', ' ').toLowerCase()}</Text><Text type="secondary">{errorGuidance(item.errorCode) ?? 'Open View log for details.'}</Text></Space> : '—' },
   ]
   return <>
     {context}
     <div className="page-heading"><div><span className="eyebrow">SOURCE BUILD</span><Title level={2}>{buildEnabled ? 'Build from a source ZIP' : t('zipTitle')}</Title><Paragraph type="secondary">{buildEnabled ? 'Upload a trusted source ZIP, choose a build method, then review the build log and image scan before deployment.' : t('zipIntro')}</Paragraph></div></div>
-    {buildEnabled && <Card className="form-card" title="Build method">
+    {buildEnabled && <Card className="form-card" title={<span>Build method <HelpHint title="Choose a build method">Use my Dockerfile if your ZIP contains one at the top level. Choose Python or Node.js template if you have source files but no Dockerfile. The required files are listed below the selector.</HelpHint></span>}>
       <Select<BuildTemplate> aria-label="Build method" value={template} style={{ width: '100%', maxWidth: 420 }} onChange={setTemplate} options={[
         { value: 'dockerfile', label: 'Use my Dockerfile' },
         { value: 'python', label: 'Python template' },
@@ -636,7 +641,8 @@ function SourcePage() {
           ? 'Put main.py at the root. requirements.txt is optional. Run an HTTP server on 0.0.0.0:8000; the image runs as a non-root user.'
           : 'Put package.json and package-lock.json at the root with a scripts.start command. The command runs directly at startup; npm is available during build only. Listen on 0.0.0.0:3000; the image runs as a non-root user.'}</Paragraph>
     </Card>}
-    <Card className="form-card upload-card"><div className="upload-icon">⌑</div><Title level={4}>{t('chooseZIP')}</Title><Paragraph type="secondary">ZIP only · 100 MiB compressed · 1 GiB expanded</Paragraph><input ref={fileInput} className="hidden-file-input" aria-label="Source ZIP" type="file" accept=".zip,application/zip" onChange={event => setFile(event.target.files?.[0] ?? null)} /><Button onClick={() => fileInput.current?.click()}>Browse ZIP...</Button>{file && <p className="selected-file">Selected: {file.name}</p>}<div className="upload-action"><Button type="primary" disabled={!file || file.size > 100 * 1024 * 1024} loading={validation.isPending || submission.isPending} onClick={() => { if (file) { if (buildEnabled) submission.mutate(file); else validation.mutate(file) } }}>{buildEnabled ? 'Queue build' : t('validateZIP')}</Button></div>{file && file.size > 100 * 1024 * 1024 && <Alert type="error" showIcon message="ZIP exceeds 100 MiB" />}{validation.data && !buildEnabled && <Alert type="success" showIcon message={validation.data.message} description={`${(validation.data.sizeBytes / 1024).toFixed(1)} KiB inspected`} />}</Card>
+    {!buildEnabled && me.data?.mode === 'authenticated' && <Alert type="info" showIcon message="Source build is not enabled for this account" description="You can check a ZIP here, but cannot queue a build. Ask a platform administrator to enable source builds." style={{ marginBottom: 16 }} />}
+    <Card className="form-card upload-card"><div className="upload-icon">⌑</div><Title level={4}>{t('chooseZIP')} <HelpHint title="Source ZIP">Put your project files directly at the top level of the ZIP. Do not wrap them in an extra folder. The selected build method determines which files are required.</HelpHint></Title><Paragraph type="secondary">ZIP only · 100 MiB compressed · 1 GiB expanded</Paragraph><input ref={fileInput} className="hidden-file-input" aria-label="Source ZIP" type="file" accept=".zip,application/zip" onChange={event => setFile(event.target.files?.[0] ?? null)} /><Button onClick={() => fileInput.current?.click()}>Browse ZIP...</Button>{file && <p className="selected-file">Selected: {file.name}</p>}<div className="upload-action"><DisabledReason reason={sourceDisabledReason}><Button type="primary" disabled={!file || !file.name.toLowerCase().endsWith('.zip') || file.size > 100 * 1024 * 1024} loading={validation.isPending || submission.isPending} onClick={() => { if (file) { if (buildEnabled) submission.mutate(file); else validation.mutate(file) } }}>{buildEnabled ? 'Queue build' : t('validateZIP')}</Button></DisabledReason></div>{file && file.size > 100 * 1024 * 1024 && <Alert type="error" showIcon message="ZIP exceeds 100 MiB" />}{file && !file.name.toLowerCase().endsWith('.zip') && <Alert type="warning" showIcon message="Choose a .zip file" />}{validation.data && !buildEnabled && <Alert type="success" showIcon message={validation.data.message} description={`${(validation.data.sizeBytes / 1024).toFixed(1)} KiB inspected`} />}</Card>
     {buildEnabled && <Card className="apps-card" title="Build history" extra={<Button size="small" loading={builds.isFetching} onClick={() => void builds.refetch()}>Refresh</Button>}>
       {builds.error && <Alert type="error" showIcon message="Could not load build history" description={builds.error.message} />}
       <Table<SourceBuild> rowKey="id" columns={columns} dataSource={builds.data ?? []} loading={builds.isPending} pagination={{ pageSize: 10 }} locale={{ emptyText: 'No builds submitted yet' }} />

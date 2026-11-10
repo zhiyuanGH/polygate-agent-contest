@@ -112,9 +112,37 @@ Select **Sign out** in the lower left. You should return to **Welcome to PolyGat
 
 For your own ZIP, place `main.py` at the ZIP root for the Python template, `package.json` and `package-lock.json` there for the Node.js template, or a `Dockerfile` there for **Use my Dockerfile**. Enter the port your app actually listens on as **App port**. Your app must listen on `0.0.0.0`; a Dockerfile `EXPOSE` line alone does not make it listen. Enter **HTTP health path** only if your app serves that path successfully. Because your app opens at `/<username>/<app-name>/`, use relative links for page assets and API calls, or configure your framework's base path to match. Check the full app in a browser after deployment.
 
-To use a **prebuilt image** instead, open **My images**. Enter a public image address and select **Inspect image**, or select **Upload image** for a local `docker save` `.tar`. The file must contain one `linux/amd64` image and be at most 1 GiB. Wait for **Approved**. If it shows **Rejected**, select **View report** or **Download JSON** for the findings. If it shows **Failed**, select **View failure** for the error details. Then open **New app**, enter the image's listening port and your resource choices, and select **Create draft**. On **Overview**, choose **Deploy image** and select the approved image. For files that must survive a restart, request a volume on **Volumes** and wait for **Ready** before selecting it in the app form. Keep a separate copy of important files.
+## Alternative: upload a prebuilt image tar
 
-![My images page](../web/public/guide-03-my-images.png)
+Use this route if you already have a container image. If it is in a public registry allowed by PolyGate, enter its address under **Inspect an image** and select **Inspect image**; continue from step 3 below.
+
+1. Save your local image as a tar archive, for example `docker save -o my-agent.tar my-agent:latest`. The tar must contain **one `linux/amd64` image** and be at most **1 GiB**. Open **My images**; the **Upload an image tar** card appears below **Inspect an image**.
+
+   ![My images page with the image tar upload card](../web/public/guide-03-my-images.png)
+
+2. In **Upload an image tar**, choose your `.tar` file. Check the selected filename, then select **Upload image** once. Wait for the upload and import to finish before leaving the page. The file chooser label may follow your computer's language.
+
+   ![A tar file selected and ready to upload](../web/public/guide-24-image-tar-selected.png)
+
+3. In **Inspection history**, find the image row and wait for **Approved**. Only an approved image can be deployed. You can select **View report** to inspect findings or **Download JSON** to save the full report. If the row says **Rejected**, open the report to see the blocking findings. If it says **Failed**, select **View failure** to see why inspection did not complete.
+
+   ![Uploaded image approved in Inspection history](../web/public/guide-26-image-approved.png)
+
+   ![The image inspection report](../web/public/guide-27-image-scan-report.png)
+
+4. Select the copy icon next to **Submitted image**, then open **New app**. Enter a unique lowercase **App name**, paste the copied reference into **Proposed image reference**, and set **App port** to the port your image actually listens on. Leave **HTTP health path** empty unless the app serves a working health endpoint. Choose CPU, memory and replicas, then select **Save draft**. For files that must survive a restart, first request a volume on **Volumes**, wait for **Ready**, and select it in this form. Keep a separate copy of important files.
+
+   ![New app draft with the image reference and listening port](../web/public/guide-28-image-app-draft-form.png)
+
+   ![Resource settings and Save draft button](../web/public/guide-28b-image-app-save-draft.png)
+
+5. On **Overview**, find the new draft and select **Deploy image**. Choose the approved image in the dialog and select **Deploy image** again. PolyGate deploys the image chosen in this dialog using the draft's saved port and resources.
+
+   ![Choosing an approved image for the draft](../web/public/guide-29-image-deploy-selection.png)
+
+6. Wait for **Running**, then select **Open app**. Check the whole page and its links at `https://apps.polylink.org/<username>/<app-name>/`; your own image may need a matching base path. Use **Logs** if the app does not become Running.
+
+   ![Running app created from an uploaded image](../web/public/guide-30-image-app-running.png)
 
 ![Volumes page](../web/public/guide-06-volumes.png)
 

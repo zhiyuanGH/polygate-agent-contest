@@ -28,7 +28,7 @@ type AccountManager interface {
 	LogoutUser(context.Context, string) error
 }
 
-var studentUsername = regexp.MustCompile(`^[a-z][a-z0-9._-]{2,31}$`)
+var studentUsername = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{2,31}$`)
 
 // NewAccountAdministrationHandler attaches account creation and password reset
 // only when a realm-scoped Keycloak credential has been configured.

@@ -53,3 +53,5 @@ body { margin: 0; min-width: 320px; overflow: hidden; }
 .login-card .brand-mark { width: 68px; height: 68px; margin: 0 auto 18px; padding: 8px; border: 1px solid #f0dfe3; }
 .login-card h2 { margin-bottom: 4px; }
 .login-card p { margin-bottom: 25px; }
+.help-hint { margin-left: 4px; color: #8f1329; font-weight: 700; border: 1px solid #d9b7bf; border-radius: 50%; width: 22px; height: 22px; padding: 0; line-height: 20px; }
+.disabled-reason { display: inline-block; cursor: help; }
