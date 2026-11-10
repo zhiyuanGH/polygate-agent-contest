@@ -15,16 +15,16 @@ pre{background:#f7f2f3;padding:14px;overflow:auto}pre code{background:none;paddi
 @media(max-width:650px){main{margin:0;padding:18px;border:0;border-radius:0}header{padding:10px 18px}h1{font-size:1.6rem}}
 </style></head><body><header><a href="/"><img src="/polyu-logo.webp" alt="PolyU logo">PolyGate · Back to console</a></header>
 <main><h1>PolyGate sample source ZIPs</h1>
-<p>These three small HTTP services are for testing the <strong>Source ZIP</strong> workflow. Each <code>dist/*.zip</code> file has its required files at the archive root. They use no cloud credentials or external API.</p>
-<p>Invited students can download the same three ZIPs directly from the PolyGate <strong>Help</strong> page. <code>package.py</code> also copies the archives into <code>web/public/</code> so the console serves them; the web build and live downloads have been checked against the source archives.</p>
+<p>Use these three small projects to try PolyGate's <strong>Source ZIP</strong> workflow. They work without cloud credentials or model API access.</p>
+<p>Download a ZIP here or from the PolyGate <strong>Help</strong> page. Upload it without extracting it.</p>
 <p>The full browser steps are in the <a href="/student-guide-en.html">English illustrated walkthrough</a> and <a href="/student-guide-zh.html">Chinese illustrated walkthrough</a>.</p>
 <table>
 <thead>
 <tr>
 <th>ZIP</th>
 <th>Build method</th>
-<th style="text-align: right;">Port</th>
-<th>What to test</th>
+<th style="text-align: right;">App port</th>
+<th>What you can try</th>
 </tr>
 </thead>
 <tbody>
@@ -32,25 +32,22 @@ pre{background:#f7f2f3;padding:14px;overflow:auto}pre code{background:none;paddi
 <td><a href="/mock-agent-python.zip"><code>mock-agent-python.zip</code></a></td>
 <td>Python template</td>
 <td style="text-align: right;">8000</td>
-<td><code>GET /</code>, <code>GET /health</code>, <code>POST /api/chat</code> with <code>{"message":"hello"}</code></td>
+<td>Ask a question and see a mock reply</td>
 </tr>
 <tr>
 <td><a href="/mock-counter-node.zip"><code>mock-counter-node.zip</code></a></td>
 <td>Node.js template</td>
 <td style="text-align: right;">3000</td>
-<td><code>GET /</code>, <code>GET /health</code>, <code>GET /api/count</code></td>
+<td>Click the counter button</td>
 </tr>
 <tr>
 <td><a href="/mock-inspector-dockerfile.zip"><code>mock-inspector-dockerfile.zip</code></a></td>
 <td>Use my Dockerfile</td>
 <td style="text-align: right;">8080</td>
-<td><code>GET /</code>, <code>GET /health</code>, <code>GET /api/request</code></td>
+<td>Follow the example links</td>
 </tr>
 </tbody>
 </table>
 <p>In PolyGate, open <strong>Source ZIP</strong>, choose the matching build method, upload the ZIP, and select <strong>Queue build</strong>. After the build and image scan show success, choose <strong>Create and deploy app</strong> and enter the port above. For the HTTP health path, use <code>/health</code>.</p>
-<p>The Python sample returns a deterministic mock agent reply. The Node sample has an in-memory counter that resets when its container restarts. The Dockerfile sample displays a harmless request summary. None of these samples is a real model agent.</p>
-<p>All three archives were built and deployed on the internal pilot on 9 November 2026. Their home pages and <code>/health</code> endpoints returned HTTP 200 through both worker entry addresses. The temporary test apps were deleted after verification.</p>
-<p>Regenerate the ZIPs after editing source files:</p>
-<pre><code class="language-powershell">python examples/polygate-mock-projects/package.py
-</code></pre></main></body></html>
+<p>The Python sample returns a mock reply. The Node.js counter resets when the app restarts. These examples do not call a real model.</p>
+<p>The projects work at an app URL such as <code>https://apps.polylink.org/&lt;username&gt;/&lt;app-name&gt;/</code>. Use <strong>Open app</strong> in PolyGate to open the correct address.</p></main></body></html>

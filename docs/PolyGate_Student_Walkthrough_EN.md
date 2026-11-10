@@ -2,15 +2,13 @@
 
 [中文版](PolyGate_学生全流程图文指南_ZH.md) · [Sample source code](../examples/polygate-mock-projects/README.md)
 
-This guide follows a real **Python ZIP → build → approved image → running app → stop → delete** browser session. The screenshots were captured from the live laboratory pilot on 9 November 2026 at 1366 × 768. Sample app names and dates in your account will differ. The platform interface is in English. No cloud model API key is needed for this walkthrough.
+Follow these steps to **upload a Python ZIP, build an image, deploy an app, open it, check its logs, and clean up**. Your app names and dates may differ from the screenshots. The sample works without a cloud model API key.
 
 ## Before you start
 
-- Use a current desktop browser. Open **<https://polygate.polylink.org/>**. The old laboratory entry **<https://YOUR-POLYGATE-HOST/>** remains available for fallback.
-- Have the username and initial password supplied by the laboratory operator. Do not use someone else's account.
-- The public URL uses a browser-trusted HTTPS certificate. The old laboratory IP entry uses a self-signed certificate; confirm that exact IP and port before accepting its warning.
-- A new account may first be asked to change its temporary password. Finish that Keycloak screen, then continue to the workspace. The screenshots below use an account whose password was already changed.
-- The sign-in form stays in the readable PolyGate light palette even when your browser uses dark mode.
+- Open **<https://polygate.polylink.org/>** in a browser.
+- Have the username and initial password supplied by the laboratory administrator.
+- If prompted to change your initial password, complete that step before continuing.
 
 ## Follow the complete ZIP workflow
 
@@ -20,7 +18,7 @@ You should see **Welcome to PolyGate**. Select **Sign in**. On the next page, fi
 
 ![PolyGate welcome screen](../web/public/guide-01-sign-in.png)
 
-![Keycloak username and password form](../web/public/guide-10-keycloak-login.png)
+![Username and password form](../web/public/guide-10-keycloak-login.png)
 
 ### Step 2 — Check the workspace
 
@@ -48,7 +46,7 @@ Select **Browse ZIP...**, choose the downloaded `mock-agent-python.zip`, and che
 
 ### Step 6 — Watch the build
 
-In **Build history**, the newest row starts at **Queued**, may show **Building**, and should become **Succeeded**. The page refreshes automatically; **Refresh** is available if needed. The screenshot also shows older test rows: use the newest row and its submission time, rather than an older successful build.
+In **Build history**, find your submission by its time. It starts at **Queued**, may show **Building**, and should become **Succeeded**. The page refreshes automatically; **Refresh** is available if needed.
 
 ![New build queued in Build history](../web/public/guide-13-build-queued.png)
 
@@ -72,7 +70,7 @@ For a first test, leave **CPU request** at `250 m`, **CPU limit** at `1000 m`, *
 
 ### Step 8 — Wait for Running and open the app
 
-PolyGate returns to **Overview**. Scroll the main workspace to **Applications**. The new row moves through deployment states and should reach **Running**. Select **Open app** in that row. Its public URL is `https://apps.polylink.org/<username>/<app-name>/`; the older `/<app-id>/` address also works. On the sample page, select **Ask agent**; a local mock reply appears. This example uses no cloud model API and consumes no model tokens.
+PolyGate returns to **Overview**. Scroll the main workspace to **Applications**. Wait for the new app to show **Running**, then select **Open app**. Its public URL has the form `https://apps.polylink.org/<username>/<app-name>/`. On the sample page, select **Ask agent** to see a sample reply.
 
 ![Running app and its actions](../web/public/guide-17-app-running.png)
 
@@ -86,7 +84,7 @@ Back on **Overview**, select **Logs** in the same app row. **Diagnostics** shows
 
 ### Step 10 — Stop the test app
 
-Select **Stop** on the app row. Check the confirmation text, then select **Stop** again in the small confirmation box. Wait for the row to show **Stopped**; cleanup of the Pod can take a short time. Stopping releases running capacity but keeps the app draft. For an app with a volume, stopping also keeps its volume and files.
+Select **Stop** on the app row and confirm. Wait for the row to show **Stopped**. The app remains available for redeployment. If it uses a volume, the files remain on that volume.
 
 ![Stop confirmation](../web/public/guide-20-stop-confirmation.png)
 
@@ -94,7 +92,7 @@ Select **Stop** on the app row. Check the confirmation text, then select **Stop*
 
 ### Step 11 — Delete the app and remove its test image
 
-Select **Delete** on the stopped app row, then **Delete** in the confirmation box. The app row disappears. If you also want to release the built image, open **My images**, find the image from this build, select **Remove**, and confirm **Remove**. Build history remains as a record, but the removed image can no longer be deployed. Never remove an image still used by an app.
+Select **Delete** on the stopped app row and confirm. If you no longer need the built image, open **My images**, select **Remove** for that image, and confirm. You cannot deploy a removed image again without resubmitting it.
 
 ![Delete confirmation](../web/public/guide-22-delete-confirmation.png)
 
@@ -112,9 +110,9 @@ Select **Sign out** in the lower left. You should return to **Welcome to PolyGat
 | `mock-counter-node.zip` | Node.js template | 3000 | `/health` |
 | `mock-inspector-dockerfile.zip` | Use my Dockerfile | 8080 | `/health` |
 
-For your own ZIP, place `main.py` at the root for the Python template, `package.json` and `package-lock.json` at the root for the Node.js template, or a `Dockerfile` at the root for **Use my Dockerfile**. Read your server's startup command or logs to find its real listening port, then enter that same number as **App port**. `EXPOSE` in a Dockerfile is a hint, not proof that the process listens there. Your process must listen on `0.0.0.0` at the app port you enter. Only set a health path if it returns HTTP 2xx or 3xx while your app is healthy.
+For your own ZIP, place `main.py` at the ZIP root for the Python template, `package.json` and `package-lock.json` there for the Node.js template, or a `Dockerfile` there for **Use my Dockerfile**. Enter the port your app actually listens on as **App port**. Your app must listen on `0.0.0.0`; a Dockerfile `EXPOSE` line alone does not make it listen. Enter **HTTP health path** only if your app serves that path successfully. Because your app opens at `/<username>/<app-name>/`, use relative links for page assets and API calls, or configure your framework's base path to match. Check the full app in a browser after deployment.
 
-To use a **prebuilt image** instead, open **My images**. Submit a public image reference with **Inspect image**, or select a local `docker save` `.tar` with **Upload image**. The tar must contain one `linux/amd64` image and be at most 1 GiB. Wait for **Approved**. High findings remain in the Trivy report but do not block deployment; Critical, Unknown or unrecognized findings do. For **Rejected**, use **View report** or **Download JSON** to inspect the findings. For **Failed**, use **View failure** to inspect and download the scan error summary; a failed scan has no vulnerability report. Open **New app**, save a draft with the image's actual listening port and resources, then on **Overview** choose **Deploy image** and select the approved image. For persistent files, first request a volume on **Volumes** and wait for **Ready**; then enable **Use persistent storage** in the app form and select that unused volume. A volume is limited to one app at a time and one running replica. The pilot has one online volume copy, so keep your own backup of important files.
+To use a **prebuilt image** instead, open **My images**. Enter a public image address and select **Inspect image**, or select **Upload image** for a local `docker save` `.tar`. The file must contain one `linux/amd64` image and be at most 1 GiB. Wait for **Approved**. If it shows **Rejected**, select **View report** or **Download JSON** for the findings. If it shows **Failed**, select **View failure** for the error details. Then open **New app**, enter the image's listening port and your resource choices, and select **Create draft**. On **Overview**, choose **Deploy image** and select the approved image. For files that must survive a restart, request a volume on **Volumes** and wait for **Ready** before selecting it in the app form. Keep a separate copy of important files.
 
 ![My images page](../web/public/guide-03-my-images.png)
 
@@ -124,4 +122,4 @@ If a step fails, note the app name, build submission time and visible error, the
 
 If the ZIP build succeeds but the app becomes **Failed** with `connection refused` events, check **App port**. The Python template uses **8000**, Node.js uses **3000**, and the Dockerfile sample uses **8080**. On **Overview**, choose **Edit port** for the failed app, enter the correct listening port, save, then choose **Deploy image** and select the same approved image. Leave the HTTP health path empty unless your app serves that path successfully. This keeps the app and its build history; you do not need to upload the ZIP again.
 
-If **Logs** show `PermissionError` when Python imports code, the port may already be correct. PolyGate runs containers as UID/GID `65532` with a read-only root filesystem, even if the Dockerfile specifies another `USER`. Make code files and parent directories readable by UID `65532` (for example, add `RUN chmod -R a+rX /app` to your Dockerfile), and write temporary files under `/tmp` or a mounted volume. Build and submit the corrected image, then select **Deploy image** on the existing failed app.
+If **Logs** show `PermissionError`, check that the app can read its source files and write temporary files to `/tmp` or a selected volume. Correct the image, submit it again, and choose **Deploy image** on the existing app.

@@ -16,20 +16,18 @@ pre{background:#f7f2f3;padding:14px;overflow:auto}pre code{background:none;paddi
 </style></head><body><header><a href="/"><img src="/polyu-logo.webp" alt="PolyU logo">PolyGate · 返回控制台</a></header>
 <main><h1>PolyGate 学生全流程图文指南（中文版）</h1>
 <p><a href="/student-guide-en.html">English version</a> · <a href="/sample-projects.html">三个示例项目源码</a></p>
-<p>本文按照一次真实浏览器操作，带你完成 <strong>下载 Python 示例 ZIP → 上传构建 → 镜像审核 → 部署 → 访问作品 → 查看日志 → 停止 → 删除</strong>。截图取自 2026 年 11 月 9 日的实验室内网试点，桌面浏览器尺寸为 1366 × 768。你看到的应用名称和时间会不同。平台按钮仍是英文；下文保留按钮原文，方便直接对照页面。本示例不需要云端模型 API Key。</p>
+<p>按照本文操作，你可以完成 <strong>下载 Python 示例 ZIP → 上传构建 → 部署 → 访问作品 → 查看日志 → 停止 → 删除</strong>。你的应用名称和时间可能与截图不同。页面按钮为英文，本文保留按钮原文以便对照。示例无需云端模型 API Key。</p>
 <h2>开始前准备</h2>
 <ul>
-<li>用桌面浏览器打开 <strong><a href="https://polygate.polylink.org/">https://polygate.polylink.org/</a></strong>。旧实验室内网入口 <a href="https://YOUR-POLYGATE-HOST/">https://YOUR-POLYGATE-HOST/</a> 保留用于回退。</li>
-<li>准备实验室管理员发给你的平台用户名和初始密码。不要使用别人的账号。</li>
-<li>公网域名使用浏览器可信的 HTTPS 证书。旧内网 IP 入口使用自签名证书；若走旧入口，应先核对 IP 和端口。</li>
-<li>新账号第一次登录可能进入 Keycloak 的修改临时密码页面。按照页面要求设置新密码后，才会进入工作区。下面的截图使用已经完成首次改密的测试账号。</li>
-<li>即使浏览器启用深色模式，登录表单也固定使用对比度清楚的 PolyGate 浅色配色。</li>
+<li>在浏览器打开 <strong><a href="https://polygate.polylink.org/">https://polygate.polylink.org/</a></strong>。</li>
+<li>准备实验室管理员提供的用户名和初始密码。</li>
+<li>如果首次登录时要求修改密码，按页面提示完成后再继续。</li>
 </ul>
 <h2>按顺序完成一次源码 ZIP 测试</h2>
 <h3>第 1 步：打开平台并登录</h3>
 <p>首页出现 <strong>Welcome to PolyGate</strong> 后，点击 <strong>Sign in</strong>。在下一个页面填写 <strong>Username</strong> 和 <strong>Password</strong>，再点击 <strong>Sign In</strong>。如果又回到登录页，先检查用户名密码；仍无法登录时请联系实验室管理员重置。</p>
 <p><img alt="PolyGate 欢迎页" src="/guide-01-sign-in.png" /></p>
-<p><img alt="Keycloak 用户名密码登录页" src="/guide-10-keycloak-login.png" /></p>
+<p><img alt="用户名密码登录页" src="/guide-10-keycloak-login.png" /></p>
 <h3>第 2 步：认识工作区与配额</h3>
 <p>登录成功后应看到 <strong>Your workspace</strong>。<strong>Overview</strong> 显示账号已配置资源和剩余额度；草稿和已停止的应用也会占用配置额度。左侧有 <strong>Help</strong>、<strong>Source ZIP</strong>、<strong>My images</strong>、<strong>Volumes</strong> 等入口。账号可同时配置多少应用，以你自己的页面显示为准。</p>
 <p><img alt="登录后的 Overview" src="/guide-02-overview.png" /></p>
@@ -43,7 +41,7 @@ pre{background:#f7f2f3;padding:14px;overflow:auto}pre code{background:none;paddi
 <p>点击 <strong>Browse ZIP...</strong>，选中刚下载的 <code>mock-agent-python.zip</code>。确认页面出现 <strong>Selected: mock-agent-python.zip</strong>，再点击一次 <strong>Queue build</strong>。ZIP 压缩后不能超过 100 MiB，解压后不能超过 1 GiB。提交上传时暂时不要刷新页面。</p>
 <p><img alt="已选中的 ZIP 和 Queue build 按钮" src="/guide-12-zip-selected.png" /></p>
 <h3>第 6 步：等待构建与镜像审核</h3>
-<p>在 <strong>Build history</strong> 找到最新一行。状态先是 <strong>Queued</strong>，可能经过 <strong>Building</strong>，成功后变成 <strong>Succeeded</strong>。页面会自动刷新，也可以点击 <strong>Refresh</strong>。截图中还有历史测试记录，请根据最新提交时间认准自己的这一行。</p>
+<p>在 <strong>Build history</strong> 按提交时间找到自己的任务。状态先是 <strong>Queued</strong>，可能经过 <strong>Building</strong>，成功后变成 <strong>Succeeded</strong>。页面会自动刷新，也可以点击 <strong>Refresh</strong>。</p>
 <p><img alt="新任务排队中" src="/guide-13-build-queued.png" /></p>
 <p>点击该行的 <strong>View log</strong> 可查看构建输出。构建失败时先看这里的错误。构建成功后还要等待镜像安全扫描；结果栏出现 <strong>Create and deploy app</strong> 才能继续。如果暂时只显示 <strong>View image and security scan</strong>，到 <strong>My images</strong> 等待 <strong>Approved</strong>；被拒绝的镜像不能部署。</p>
 <p><img alt="构建日志窗口" src="/guide-15-build-log.png" /></p>
@@ -55,18 +53,18 @@ pre{background:#f7f2f3;padding:14px;overflow:auto}pre code{background:none;paddi
 <p>第一次测试可保持默认资源：<strong>CPU request</strong> 为 <code>250 m</code>，<strong>CPU limit</strong> 为 <code>1000 m</code>，<strong>Memory</strong> 为 <code>1024 MiB</code>，<strong>Replicas</strong> 为 <code>1</code>，<strong>Use persistent storage</strong> 关闭。在中间工作区向下滚动，点击一次 <strong>Create and deploy</strong>。平台会建立草稿并排队部署。单容器内存最多可选 4096 MiB（4 GiB），但账号和集群总额度仍会限制能否部署。</p>
 <p><img alt="资源设置及 Create and deploy 按钮" src="/guide-16b-create-app-resources.png" /></p>
 <h3>第 8 步：等待 Running，打开作品</h3>
-<p>页面回到 <strong>Overview</strong> 后，在中间工作区向下滚动到 <strong>Applications</strong>。新应用状态会逐步变化，最终应显示 <strong>Running</strong>。在同一行点击 <strong>Open app</strong>。公网作品地址为 <code>https://apps.polylink.org/&lt;username&gt;/&lt;app-name&gt;/</code>；原来的 <code>/&lt;app-id&gt;/</code> 地址也继续可用。示例页面打开后点击 <strong>Ask agent</strong>，下方会出现本地生成的模拟回复；不会调用云端模型，也不会产生模型 token 费用。</p>
+<p>页面回到 <strong>Overview</strong> 后，在中间工作区找到 <strong>Applications</strong>。等待新应用显示 <strong>Running</strong>，再点击同一行的 <strong>Open app</strong>。作品地址格式为 <code>https://apps.polylink.org/&lt;username&gt;/&lt;app-name&gt;/</code>。打开示例页面后，点击 <strong>Ask agent</strong> 可查看模拟回复。</p>
 <p><img alt="Running 状态及该应用操作按钮" src="/guide-17-app-running.png" /></p>
 <p><img alt="Mock Agent 作品页面与模拟回复" src="/guide-18-open-app.png" /></p>
 <h3>第 9 步：查看日志和资源用量</h3>
 <p>返回 PolyGate 的 <strong>Overview</strong>，在该应用行点击 <strong>Logs</strong>。<strong>Diagnostics</strong> 窗口包含最近 CPU、内存采样，当前容器日志、历史日志和事件。示例的 <code>/health</code> 请求会出现在当前日志里。看完点击窗口右上角 <strong>×</strong>。若应用一直没有变为 Running，先看状态和这个窗口里的报错，再修改配置。</p>
 <p><img alt="Diagnostics 中的资源采样和容器日志" src="/guide-19-app-logs.png" /></p>
 <h3>第 10 步：停止测试应用</h3>
-<p>点击该行的 <strong>Stop</strong>。核对确认框文字后，再点击框内的 <strong>Stop</strong>。等待状态显示 <strong>Stopped</strong>；Pod 清理可能需要片刻。停止会释放运行容量，但保留应用草稿；若应用挂载了卷，卷及文件也会保留。</p>
+<p>点击应用所在行的 <strong>Stop</strong> 并确认，等待状态显示 <strong>Stopped</strong>。之后仍可重新部署该应用。若应用使用了卷，卷中的文件会保留。</p>
 <p><img alt="停止应用确认框" src="/guide-20-stop-confirmation.png" /></p>
 <p><img alt="应用已停止" src="/guide-21-app-stopped.png" /></p>
 <h3>第 11 步：删除应用及测试镜像</h3>
-<p>在已停止应用那一行点击 <strong>Delete</strong>，再在确认框中点击 <strong>Delete</strong>。应用行会消失。如果还想回收这次构建的镜像，打开 <strong>My images</strong>，找到对应镜像，点击 <strong>Remove</strong> 并再次确认。构建历史会保留，但已移除的镜像不能再部署。正在被应用使用的镜像不能移除。</p>
+<p>在已停止应用所在行点击 <strong>Delete</strong> 并确认。如果不再需要本次构建的镜像，可到 <strong>My images</strong> 找到它，点击 <strong>Remove</strong> 并确认。移除后如需再次部署，需要重新提交镜像。</p>
 <p><img alt="删除应用确认框" src="/guide-22-delete-confirmation.png" /></p>
 <h3>第 12 步：退出账号</h3>
 <p>点击左下角 <strong>Sign out</strong>。页面应回到带有 <strong>Sign in</strong> 按钮的欢迎页。退出登录不会停止你有意保留运行的应用。</p>
@@ -102,10 +100,10 @@ pre{background:#f7f2f3;padding:14px;overflow:auto}pre code{background:none;paddi
 </tr>
 </tbody>
 </table>
-<p>提交自己的源码时：Python 模板的 <code>main.py</code>、Node.js 模板的 <code>package.json</code> 和 <code>package-lock.json</code>、或自定义方式的 <code>Dockerfile</code> 必须在 ZIP 根目录。先看程序启动命令或日志，确认实际监听端口，再把同一个数字填进 <strong>App port</strong>。Dockerfile 的 <code>EXPOSE</code> 只是声明，不能证明程序确实监听该端口。程序应监听 <code>0.0.0.0</code> 和表单里填的端口。只有应用健康时真正返回 HTTP 2xx 或 3xx，才填写 HTTP 健康检查路径。</p>
-<p>如果已有<strong>预构建镜像</strong>：进入 <strong>My images</strong>，可以填写公开镜像引用并点击 <strong>Inspect image</strong>，也可以点击 <strong>Upload image</strong> 上传本机 <code>docker save</code> 生成的 <code>.tar</code>。归档最多 1 GiB，须包含一张 <code>linux/amd64</code> 镜像。等到 <strong>Approved</strong>。High 漏洞仍显示在 Trivy 报告中，但不阻止部署；Critical、Unknown 或无法识别的严重度会阻止部署。若显示 <strong>Rejected</strong>，可用 <strong>View report</strong> 查看或 <strong>Download JSON</strong> 下载漏洞报告；若显示 <strong>Failed</strong>，可点 <strong>View failure</strong> 查看并下载扫描错误摘要，此时没有漏洞报告。然后进入 <strong>New app</strong>，按镜像内程序的真实监听端口和资源创建草稿；到 <strong>Overview</strong> 点 <strong>Deploy image</strong>，选择刚批准的镜像。若需要持久化文件，先到 <strong>Volumes</strong> 申请卷并等到 <strong>Ready</strong>，再在应用表单启用 <strong>Use persistent storage</strong>，选择未占用的卷。一个卷同一时间只能用于一个应用、一个运行副本。试点卷目前只有一个在线副本，重要文件请另外保留备份。</p>
+<p>提交自己的源码时，Python 模板的 <code>main.py</code>、Node.js 模板的 <code>package.json</code> 和 <code>package-lock.json</code>，或自定义方式的 <code>Dockerfile</code>，都应放在 ZIP 根目录。把程序实际监听的端口填入 <strong>App port</strong>；程序应监听 <code>0.0.0.0</code>，仅在 Dockerfile 中写 <code>EXPOSE</code> 不会让程序自动监听。只有应用确实提供可访问的健康检查地址时，才填写 <strong>HTTP health path</strong>。作品将部署在 <code>/&lt;username&gt;/&lt;app-name&gt;/</code> 下，页面资源和 API 请求请使用相对路径，或为所用框架设置对应基础路径；部署后请在浏览器完整检查页面功能。</p>
+<p>如果已有<strong>构建好的镜像</strong>，进入 <strong>My images</strong>：填写公开镜像地址并点击 <strong>Inspect image</strong>，或点击 <strong>Upload image</strong> 上传本机 <code>docker save</code> 生成的 <code>.tar</code>。文件最多 1 GiB，须包含一张 <code>linux/amd64</code> 镜像。等待状态变为 <strong>Approved</strong>；如果是 <strong>Rejected</strong>，点击 <strong>View report</strong> 或 <strong>Download JSON</strong> 查看原因；如果是 <strong>Failed</strong>，点击 <strong>View failure</strong> 查看错误。然后进入 <strong>New app</strong>，填写程序实际监听的端口和资源，点击 <strong>Create draft</strong>；回到 <strong>Overview</strong>，点击 <strong>Deploy image</strong> 并选择刚批准的镜像。若需要保留文件，先到 <strong>Volumes</strong> 申请卷并等到 <strong>Ready</strong>，再在应用表单里选择该卷。重要文件请另行备份。</p>
 <p><img alt="My images 页面" src="/guide-03-my-images.png" /></p>
 <p><img alt="Volumes 页面" src="/guide-06-volumes.png" /></p>
 <p>若任一步失败，记下应用名、提交时间和页面错误，到 <strong>Build history → View log</strong> 或 <strong>Overview → Logs</strong> 查看，再把这些信息交给实验室管理员。不要把密码或 API Key 放进截图、源码或日志。</p>
 <p>如果 ZIP 构建成功，但应用显示 <strong>Failed</strong>，事件里有 <code>connection refused</code>，先核对 <strong>App port</strong>：Python 模板是 <strong>8000</strong>，Node.js 模板是 <strong>3000</strong>，Dockerfile 示例是 <strong>8080</strong>。在 <strong>Overview</strong> 找到失败应用，点击 <strong>Edit port</strong>，填入程序实际监听的端口并保存；随后点击 <strong>Deploy image</strong>，选择同一张已批准镜像重新部署。除非应用确实提供对应接口，否则 HTTP 健康检查路径先留空。这样可以保留原应用和构建记录，不必重新上传 ZIP。</p>
-<p>如果 <strong>Logs</strong> 显示 Python 导入代码时发生 <code>PermissionError</code>，端口可能本来就是正确的。PolyGate 固定用 UID/GID <code>65532</code> 运行容器，并把根文件系统设为只读；Dockerfile 中的 <code>USER</code> 不会覆盖平台设置。应让该 UID 能读取代码和父目录（例如在 Dockerfile 加 <code>RUN chmod -R a+rX /app</code>），临时文件写到 <code>/tmp</code>，持久数据写到挂载卷。修正镜像后，在原先失败的应用上重新选择 <strong>Deploy image</strong>。</p></main></body></html>
+<p>如果 <strong>Logs</strong> 出现 <code>PermissionError</code>，请检查应用是否有权读取源码，以及临时文件是否写入 <code>/tmp</code> 或所选卷。修正镜像并重新提交后，可在原应用上点击 <strong>Deploy image</strong>，无需重新创建应用。</p></main></body></html>

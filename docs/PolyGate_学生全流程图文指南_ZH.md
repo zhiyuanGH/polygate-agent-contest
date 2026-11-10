@@ -2,15 +2,13 @@
 
 [English version](PolyGate_Student_Walkthrough_EN.md) · [三个示例项目源码](../examples/polygate-mock-projects/README.md)
 
-本文按照一次真实浏览器操作，带你完成 **下载 Python 示例 ZIP → 上传构建 → 镜像审核 → 部署 → 访问作品 → 查看日志 → 停止 → 删除**。截图取自 2026 年 11 月 9 日的实验室内网试点，桌面浏览器尺寸为 1366 × 768。你看到的应用名称和时间会不同。平台按钮仍是英文；下文保留按钮原文，方便直接对照页面。本示例不需要云端模型 API Key。
+按照本文操作，你可以完成 **下载 Python 示例 ZIP → 上传构建 → 部署 → 访问作品 → 查看日志 → 停止 → 删除**。你的应用名称和时间可能与截图不同。页面按钮为英文，本文保留按钮原文以便对照。示例无需云端模型 API Key。
 
 ## 开始前准备
 
-- 用桌面浏览器打开 **<https://polygate.polylink.org/>**。旧实验室内网入口 **<https://YOUR-POLYGATE-HOST/>** 保留用于回退。
-- 准备实验室管理员发给你的平台用户名和初始密码。不要使用别人的账号。
-- 公网域名使用浏览器可信的 HTTPS 证书。旧内网 IP 入口使用自签名证书；若走旧入口，应先核对 IP 和端口。
-- 新账号第一次登录可能进入 Keycloak 的修改临时密码页面。按照页面要求设置新密码后，才会进入工作区。下面的截图使用已经完成首次改密的测试账号。
-- 即使浏览器启用深色模式，登录表单也固定使用对比度清楚的 PolyGate 浅色配色。
+- 在浏览器打开 **<https://polygate.polylink.org/>**。
+- 准备实验室管理员提供的用户名和初始密码。
+- 如果首次登录时要求修改密码，按页面提示完成后再继续。
 
 ## 按顺序完成一次源码 ZIP 测试
 
@@ -20,7 +18,7 @@
 
 ![PolyGate 欢迎页](../web/public/guide-01-sign-in.png)
 
-![Keycloak 用户名密码登录页](../web/public/guide-10-keycloak-login.png)
+![用户名密码登录页](../web/public/guide-10-keycloak-login.png)
 
 ### 第 2 步：认识工作区与配额
 
@@ -48,7 +46,7 @@
 
 ### 第 6 步：等待构建与镜像审核
 
-在 **Build history** 找到最新一行。状态先是 **Queued**，可能经过 **Building**，成功后变成 **Succeeded**。页面会自动刷新，也可以点击 **Refresh**。截图中还有历史测试记录，请根据最新提交时间认准自己的这一行。
+在 **Build history** 按提交时间找到自己的任务。状态先是 **Queued**，可能经过 **Building**，成功后变成 **Succeeded**。页面会自动刷新，也可以点击 **Refresh**。
 
 ![新任务排队中](../web/public/guide-13-build-queued.png)
 
@@ -72,7 +70,7 @@
 
 ### 第 8 步：等待 Running，打开作品
 
-页面回到 **Overview** 后，在中间工作区向下滚动到 **Applications**。新应用状态会逐步变化，最终应显示 **Running**。在同一行点击 **Open app**。公网作品地址为 `https://apps.polylink.org/<username>/<app-name>/`；原来的 `/<app-id>/` 地址也继续可用。示例页面打开后点击 **Ask agent**，下方会出现本地生成的模拟回复；不会调用云端模型，也不会产生模型 token 费用。
+页面回到 **Overview** 后，在中间工作区找到 **Applications**。等待新应用显示 **Running**，再点击同一行的 **Open app**。作品地址格式为 `https://apps.polylink.org/<username>/<app-name>/`。打开示例页面后，点击 **Ask agent** 可查看模拟回复。
 
 ![Running 状态及该应用操作按钮](../web/public/guide-17-app-running.png)
 
@@ -86,7 +84,7 @@
 
 ### 第 10 步：停止测试应用
 
-点击该行的 **Stop**。核对确认框文字后，再点击框内的 **Stop**。等待状态显示 **Stopped**；Pod 清理可能需要片刻。停止会释放运行容量，但保留应用草稿；若应用挂载了卷，卷及文件也会保留。
+点击应用所在行的 **Stop** 并确认，等待状态显示 **Stopped**。之后仍可重新部署该应用。若应用使用了卷，卷中的文件会保留。
 
 ![停止应用确认框](../web/public/guide-20-stop-confirmation.png)
 
@@ -94,7 +92,7 @@
 
 ### 第 11 步：删除应用及测试镜像
 
-在已停止应用那一行点击 **Delete**，再在确认框中点击 **Delete**。应用行会消失。如果还想回收这次构建的镜像，打开 **My images**，找到对应镜像，点击 **Remove** 并再次确认。构建历史会保留，但已移除的镜像不能再部署。正在被应用使用的镜像不能移除。
+在已停止应用所在行点击 **Delete** 并确认。如果不再需要本次构建的镜像，可到 **My images** 找到它，点击 **Remove** 并确认。移除后如需再次部署，需要重新提交镜像。
 
 ![删除应用确认框](../web/public/guide-22-delete-confirmation.png)
 
@@ -112,9 +110,9 @@
 | `mock-counter-node.zip` | Node.js template | 3000 | `/health` |
 | `mock-inspector-dockerfile.zip` | Use my Dockerfile | 8080 | `/health` |
 
-提交自己的源码时：Python 模板的 `main.py`、Node.js 模板的 `package.json` 和 `package-lock.json`、或自定义方式的 `Dockerfile` 必须在 ZIP 根目录。先看程序启动命令或日志，确认实际监听端口，再把同一个数字填进 **App port**。Dockerfile 的 `EXPOSE` 只是声明，不能证明程序确实监听该端口。程序应监听 `0.0.0.0` 和表单里填的端口。只有应用健康时真正返回 HTTP 2xx 或 3xx，才填写 HTTP 健康检查路径。
+提交自己的源码时，Python 模板的 `main.py`、Node.js 模板的 `package.json` 和 `package-lock.json`，或自定义方式的 `Dockerfile`，都应放在 ZIP 根目录。把程序实际监听的端口填入 **App port**；程序应监听 `0.0.0.0`，仅在 Dockerfile 中写 `EXPOSE` 不会让程序自动监听。只有应用确实提供可访问的健康检查地址时，才填写 **HTTP health path**。作品将部署在 `/<username>/<app-name>/` 下，页面资源和 API 请求请使用相对路径，或为所用框架设置对应基础路径；部署后请在浏览器完整检查页面功能。
 
-如果已有**预构建镜像**：进入 **My images**，可以填写公开镜像引用并点击 **Inspect image**，也可以点击 **Upload image** 上传本机 `docker save` 生成的 `.tar`。归档最多 1 GiB，须包含一张 `linux/amd64` 镜像。等到 **Approved**。High 漏洞仍显示在 Trivy 报告中，但不阻止部署；Critical、Unknown 或无法识别的严重度会阻止部署。若显示 **Rejected**，可用 **View report** 查看或 **Download JSON** 下载漏洞报告；若显示 **Failed**，可点 **View failure** 查看并下载扫描错误摘要，此时没有漏洞报告。然后进入 **New app**，按镜像内程序的真实监听端口和资源创建草稿；到 **Overview** 点 **Deploy image**，选择刚批准的镜像。若需要持久化文件，先到 **Volumes** 申请卷并等到 **Ready**，再在应用表单启用 **Use persistent storage**，选择未占用的卷。一个卷同一时间只能用于一个应用、一个运行副本。试点卷目前只有一个在线副本，重要文件请另外保留备份。
+如果已有**构建好的镜像**，进入 **My images**：填写公开镜像地址并点击 **Inspect image**，或点击 **Upload image** 上传本机 `docker save` 生成的 `.tar`。文件最多 1 GiB，须包含一张 `linux/amd64` 镜像。等待状态变为 **Approved**；如果是 **Rejected**，点击 **View report** 或 **Download JSON** 查看原因；如果是 **Failed**，点击 **View failure** 查看错误。然后进入 **New app**，填写程序实际监听的端口和资源，点击 **Create draft**；回到 **Overview**，点击 **Deploy image** 并选择刚批准的镜像。若需要保留文件，先到 **Volumes** 申请卷并等到 **Ready**，再在应用表单里选择该卷。重要文件请另行备份。
 
 ![My images 页面](../web/public/guide-03-my-images.png)
 
@@ -124,4 +122,4 @@
 
 如果 ZIP 构建成功，但应用显示 **Failed**，事件里有 `connection refused`，先核对 **App port**：Python 模板是 **8000**，Node.js 模板是 **3000**，Dockerfile 示例是 **8080**。在 **Overview** 找到失败应用，点击 **Edit port**，填入程序实际监听的端口并保存；随后点击 **Deploy image**，选择同一张已批准镜像重新部署。除非应用确实提供对应接口，否则 HTTP 健康检查路径先留空。这样可以保留原应用和构建记录，不必重新上传 ZIP。
 
-如果 **Logs** 显示 Python 导入代码时发生 `PermissionError`，端口可能本来就是正确的。PolyGate 固定用 UID/GID `65532` 运行容器，并把根文件系统设为只读；Dockerfile 中的 `USER` 不会覆盖平台设置。应让该 UID 能读取代码和父目录（例如在 Dockerfile 加 `RUN chmod -R a+rX /app`），临时文件写到 `/tmp`，持久数据写到挂载卷。修正镜像后，在原先失败的应用上重新选择 **Deploy image**。
+如果 **Logs** 出现 `PermissionError`，请检查应用是否有权读取源码，以及临时文件是否写入 `/tmp` 或所选卷。修正镜像并重新提交后，可在原应用上点击 **Deploy image**，无需重新创建应用。

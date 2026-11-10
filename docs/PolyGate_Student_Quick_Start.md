@@ -2,22 +2,22 @@
 
 For every click and matching live screenshots, see the [English walkthrough](PolyGate_Student_Walkthrough_EN.md) or [中文图文指南](PolyGate_学生全流程图文指南_ZH.md).
 
-PolyGate currently accepts invited pilot accounts. Open **https://polygate.polylink.org/** and select **Sign in**. The public address uses a browser-trusted HTTPS certificate. Keep your password private; new accounts must choose a new password on first sign-in. Follow the illustrated walkthrough linked above for screenshots. If the public address is unavailable, ask the laboratory operator for the internal fallback entry; it uses a self-signed certificate.
+Open **https://polygate.polylink.org/** and select **Sign in**. Enter the account details provided by the laboratory administrator. If prompted, set a new password before continuing. The illustrated walkthrough above shows every step with screenshots.
 
 ## Deploy a container image
 
 1. Open **My images**. Enter a public container image reference and select **Inspect image**, or select **Upload image** to submit a local `docker save` `.tar` containing one `linux/amd64` image (up to 1 GiB).
-2. Wait for the image to show **Approved**. PolyGate pins the digest and copies the image to its private registry. High findings remain visible in the report but do not block deployment; Critical, Unknown or unrecognized findings do. If the result is **Rejected**, select **View report** or **Download JSON**. If it is **Failed**, select **View failure** to inspect and download the scan error summary. Neither state can be deployed.
+2. Wait for **Approved**. If the result is **Rejected**, select **View report** or **Download JSON** to see why. If it is **Failed**, select **View failure** for the error details. Only approved images can be deployed.
 3. Open **New app**. Enter a name and the port on which your container listens. Set the CPU, memory and replica count, then select **Create draft**.
 4. On **Overview**, choose **Deploy image** for that draft and select the approved image. Wait until the app shows **Running**, then choose **Open app**.
 
 **App port** is the HTTP server's listening port inside the container, not a browser URL or host port. Your application must listen on `0.0.0.0` at that port. The samples use Python `8000`, Node.js `3000`, and Dockerfile `8080`; your own image may differ. A Dockerfile `EXPOSE` line does not confirm what port the process actually uses. If the app has a health endpoint returning HTTP 2xx or 3xx, enter its path in **HTTP health path**; otherwise leave the field empty to use the default TCP check. The maximum memory setting is **4096 MiB (4 GiB)** per container. Deployment can be refused when your account or the shared cluster capacity is full.
 
-PolyGate runs containers as UID/GID `65532` with a read-only root filesystem, even if the Dockerfile declares another `USER`. Make your code and its parent directories readable by that UID (for example, `RUN chmod -R a+rX /app`); put temporary files in `/tmp` or use a mounted volume. If the Pod starts and then restarts with `PermissionError`, check **Overview → Logs** before changing the app port.
+If **Overview → Logs** shows `PermissionError`, check that the app can read its files and write temporary data to `/tmp` or a selected volume. Fix the image, submit it again, and deploy it to the existing app.
 
 ## Public app URL and base path
 
-**Open app** uses `https://apps.polylink.org/<username>/<app-name>/` for a running app. Build browser assets, API calls and navigation with relative URLs, or configure your framework to use this base path. Requests to `/assets`, `/api` or `/openapi.json` at the domain root have no app name and cannot be routed reliably. PolyGate supplies `X-Forwarded-Prefix` to the container for frameworks that support a proxy prefix. See the [base path compatibility guide](PolyGate_学生作品路径适配.md), including a FastAPI example and tested workshop patch. The stable `/<app-id>/` route also remains available.
+**Open app** uses `https://apps.polylink.org/<username>/<app-name>/`. Build your page assets, API calls and navigation with relative URLs, or configure your framework to use this base path. Root URLs such as `/assets` and `/api` may fail. Check the complete app in a browser after deployment. See the [path setup guide](PolyGate_学生作品路径适配.md) if your framework needs additional settings.
 
 ## Build from a source ZIP
 
@@ -33,20 +33,18 @@ To update an existing app from a new ZIP, build the new ZIP and wait for **Appro
 ## Manage an app
 
 - On **Overview**, use **Logs** for recent output, events and resource samples. Use **Open app** to visit a running app.
-- The quota card shows configured resources, the amount left to configure, and recent CPU and memory samples from running Pods. Drafts and stopped apps count toward configured quota; a missing Pod sample is marked as incomplete. Free quota does not guarantee that the cluster can schedule a new app immediately.
+- The quota card shows your configured resources, remaining quota, and recent usage. Drafts and stopped apps also count toward configured quota.
 - Use **Stop** to remove its running workload and release its reserved resources. A stopped app can be deployed again. Use **Delete** to remove a stopped app.
-- **Secrets** stores environment keys for an app. A saved value is not displayed again; replacing it takes effect when the app starts a new Pod. This internal pilot does not yet encrypt Kubernetes Secrets at rest: use short-lived tokens with spending limits, and do not save production credentials. Do not paste an API key into a Dockerfile, source ZIP or build log.
-- **Update image**, **Restore version** and **Change resources** are available for a running app. A rolling update needs enough temporary capacity for the old and new Pods. A recreate update briefly stops the app.
-- **Restart** replaces the app Pod without changing its image or settings. Choose **Recreate** for a brief interruption without extra quota, or **Rolling** to keep the app available while a replacement Pod starts; Rolling requires extra quota.
+- Use **Secrets** for app environment keys. A saved value is not displayed again. Keep your own copy and do not put keys in a Dockerfile, source ZIP or build log.
+- **Update image**, **Restore version** and **Change resources** are available for a running app. A rolling update needs enough temporary capacity; a recreate update briefly stops the app.
+- **Restart** restarts the app without changing its image or settings. **Recreate** briefly interrupts the app; **Rolling** needs additional capacity while the new version starts.
 
 ## Use persistent storage
 
-Invited pilot accounts can open **Volumes** to request up to two volumes and 10 GiB total. Wait for **Ready**, then turn on **Persistent storage** in **New app**, select an unused volume and set its mount path. A volume can serve one app at a time. Stopping or deleting the app keeps its files; deleting the volume permanently removes them.
+Open **Volumes** to request storage, then wait for **Ready**. In **New app**, enable **Use persistent storage**, select an unused volume, and set its mount path. A volume can serve one app at a time. Stopping or deleting the app keeps its files; deleting the volume permanently removes them.
 
-Pilot volumes have one online copy on the `.45` server. Daily and weekly backups go to the separate `.217` server, but a `.45` failure can interrupt access and changes since the latest backup may be lost. Keep your own copy of important files. If an operation fails, check the app status and **Logs** before retrying. If the error remains, give the laboratory operator the app name and approximate time.
+Keep your own copy of important files. If an operation fails, check the app status and **Logs**. If the error remains, give the laboratory administrator the app name and approximate time.
 
 ## Sign out or switch accounts
 
-Choose **Sign out** in the left navigation. This closes both your PolyGate session and the browser's identity-provider session. To use a different account in the same browser, select **Sign in** and enter the other account's credentials. Signing out does not stop a running app.
-
-On desktop screens, the navigation and top bar stay in place while long workspace content scrolls inside the main panel. On narrow screens, the page scrolls normally.
+Choose **Sign out** in the left navigation. To use a different account in the same browser, select **Sign in** and enter that account's credentials. Signing out does not stop a running app.

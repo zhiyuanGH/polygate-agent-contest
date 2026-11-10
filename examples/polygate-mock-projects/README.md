@@ -1,29 +1,19 @@
 # PolyGate sample source ZIPs
 
-These three small HTTP services are for testing the **Source ZIP** workflow. Each `dist/*.zip` file has its required files at the archive root. They use no cloud credentials or external API.
+Use these three small projects to try PolyGate's **Source ZIP** workflow. They work without cloud credentials or model API access.
 
-Invited students can download the same three ZIPs directly from the PolyGate **Help** page. `package.py` also copies the archives into `web/public/` so the console serves them; the web build and live downloads have been checked against the source archives.
+Download a ZIP here or from the PolyGate **Help** page. Upload it without extracting it.
 
 The full browser steps are in the [English illustrated walkthrough](../../docs/PolyGate_Student_Walkthrough_EN.md) and [Chinese illustrated walkthrough](../../docs/PolyGate_学生全流程图文指南_ZH.md).
 
-| ZIP | Build method | Port | What to test |
+| ZIP | Build method | App port | What you can try |
 | --- | --- | ---: | --- |
-| [`mock-agent-python.zip`](dist/mock-agent-python.zip) | Python template | 8000 | `GET /`, `GET /health`, `POST /api/chat` with `{"message":"hello"}` |
-| [`mock-counter-node.zip`](dist/mock-counter-node.zip) | Node.js template | 3000 | `GET /`, `GET /health`, `GET /api/count` |
-| [`mock-inspector-dockerfile.zip`](dist/mock-inspector-dockerfile.zip) | Use my Dockerfile | 8080 | `GET /`, `GET /health`, `GET /api/request` |
+| [`mock-agent-python.zip`](dist/mock-agent-python.zip) | Python template | 8000 | Ask a question and see a mock reply |
+| [`mock-counter-node.zip`](dist/mock-counter-node.zip) | Node.js template | 3000 | Click the counter button |
+| [`mock-inspector-dockerfile.zip`](dist/mock-inspector-dockerfile.zip) | Use my Dockerfile | 8080 | Follow the example links |
 
 In PolyGate, open **Source ZIP**, choose the matching build method, upload the ZIP, and select **Queue build**. After the build and image scan show success, choose **Create and deploy app** and enter the port above. For the HTTP health path, use `/health`.
 
-The Python sample returns a deterministic mock agent reply. The Node sample has an in-memory counter that resets when its container restarts. The Dockerfile sample displays a harmless request summary. None of these samples is a real model agent.
+The Python sample returns a mock reply. The Node.js counter resets when the app restarts. These examples do not call a real model.
 
-Browser API calls and links use relative URLs, so the interactive pages work at `https://apps.polylink.org/<username>/<app-name>/`. Always open the app URL with its trailing `/`; PolyGate redirects the no-slash URL to it.
-
-All three archives were built and deployed on the internal pilot on 9 November 2026. Their home pages and `/health` endpoints returned HTTP 200 through both worker entry addresses. The temporary test apps were deleted after verification.
-
-On 10 November 2026, the updated ZIPs were downloaded from the live Help page and rebuilt, approved, and deployed again. In a browser, the Python chat button, Node counter button, and Dockerfile sample links all worked through the public `/<username>/<app-name>/` paths. The temporary apps were stopped and deleted after verification.
-
-Regenerate the ZIPs after editing source files:
-
-```powershell
-python examples/polygate-mock-projects/package.py
-```
+The projects work at an app URL such as `https://apps.polylink.org/<username>/<app-name>/`. Use **Open app** in PolyGate to open the correct address.
