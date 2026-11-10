@@ -55,3 +55,6 @@ body { margin: 0; min-width: 320px; overflow: hidden; }
 .login-card p { margin-bottom: 25px; }
 .help-hint { margin-left: 4px; color: #8f1329; font-weight: 700; border: 1px solid #d9b7bf; border-radius: 50%; width: 22px; height: 22px; padding: 0; line-height: 20px; }
 .disabled-reason { display: inline-block; cursor: help; }
+.runtime-requirements { margin-bottom: 20px; }
+.runtime-requirements .ant-typography { margin-bottom: 8px; }
+.runtime-requirements .ant-typography:last-child { margin-bottom: 0; }

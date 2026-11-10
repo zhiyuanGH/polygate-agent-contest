@@ -19,6 +19,39 @@ jobs:
           cache: true
       - run: go test ./...
 
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: pgtest
+          POSTGRES_PASSWORD: local-test-only
+          POSTGRES_DB: polygate_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pgtest -d polygate_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      POLYGATE_TEST_DATABASE_URL: postgres://pgtest:local-test-only@localhost:5432/polygate_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Apply schema to disposable test database
+        run: |
+          python3 - <<'PY' | psql "$POLYGATE_TEST_DATABASE_URL" -v ON_ERROR_STOP=1
+          from pathlib import Path
+          for path in sorted(Path('db/migrations').glob('*.sql')):
+              print(path.read_text().split('-- +goose Down', 1)[0])
+          PY
+      - run: go test ./internal/postgres -count=1
+
   web:
     runs-on: ubuntu-latest
     defaults:
@@ -32,4 +65,5 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
+      - run: npm test
       - run: npm run build

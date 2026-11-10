@@ -1,13 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, Button, Card, Input, Modal, Popconfirm, Progress, Space, Spin, Table, Tag, Typography, message } from 'antd'
 import { Link } from 'react-router-dom'
 import { api, type ImageArtifact } from './api'
 import { DisabledReason, HelpHint } from './HelpHint'
+import RuntimeRequirements from './RuntimeRequirements'
+import { inspectionFeedback, observePendingScans, scanObservationLimitMs, shouldPollScans } from './deploymentSupport'
 
 const { Title, Text, Paragraph } = Typography
-const scanFinished = (item: ImageArtifact) => item.scanStatus !== 'PendingScan'
-const maxAutomaticScanWaitMs = 30 * 60 * 1000
 const harborReportType = 'application/vnd.security.vulnerability.report; version=1.1'
 
 function scanLabel(item: ImageArtifact) {
@@ -15,11 +15,11 @@ function scanLabel(item: ImageArtifact) {
   return item.scanStatus
 }
 
-function scanDetails(item: ImageArtifact) {
+function scanDetails(item: ImageArtifact, observedAt?: number) {
   if (item.scanStatus === 'Failed') return item.scanErrorCode
     ? `Inspection failed (${item.scanErrorCode}). This image cannot be deployed.`
     : 'Inspection failed. This image cannot be deployed.'
-  if (item.scanStatus === 'PendingScan' && Date.now() - new Date(item.createdAt).getTime() >= maxAutomaticScanWaitMs)
+  if (item.scanStatus === 'PendingScan' && observedAt !== undefined && Date.now() - observedAt >= scanObservationLimitMs)
     return 'The check is taking longer than expected. Refresh this list later.'
   if (!item.scanSummary) return item.scanStatus === 'Rejected'
     ? 'The image did not meet the current security policy.' : ''
@@ -38,23 +38,46 @@ export default function ImagePage() {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [reportImage, setReportImage] = useState<ImageArtifact | null>(null)
   const [failureImage, setFailureImage] = useState<ImageArtifact | null>(null)
+  const [scanObservedAt, setScanObservedAt] = useState<Record<string, number>>({})
   const me = useQuery({ queryKey: ['me'], queryFn: api.me })
   const images = useQuery({
     queryKey: ['images'], queryFn: api.images,
     enabled: me.data?.mode === 'authenticated',
-    refetchInterval: query => query.state.data?.some(item => !scanFinished(item) &&
-      Date.now() - new Date(item.createdAt).getTime() < maxAutomaticScanWaitMs) ? 5000 : false,
+    refetchInterval: query => shouldPollScans(query.state.data ?? [], scanObservedAt, Date.now()) ? 5000 : false,
   })
+  useEffect(() => {
+    if (!images.data) return
+    setScanObservedAt(previous => {
+      const next = observePendingScans(images.data, previous, Date.now())
+      return Object.keys(previous).length === Object.keys(next).length &&
+        Object.keys(next).every(id => previous[id] === next[id]) ? previous : next
+    })
+  }, [images.data])
   const query = useQueryClient()
   const [toast, context] = message.useMessage()
   const inspect = useMutation({
     mutationFn: api.inspectImage,
-    onSuccess: async () => {
+    onSuccess: async item => {
       setReference('')
       await query.invalidateQueries({ queryKey: ['images'] })
-      toast.success('Image queued for security inspection')
+      const feedback = inspectionFeedback(item)
+      toast[feedback.type](feedback.message)
     },
     onError: (error: Error) => toast.error(error.message),
+  })
+  const retryScan = useMutation({
+    mutationFn: api.retryImageScan,
+    onSuccess: async item => {
+      if (item.scanStatus === 'PendingScan') setScanObservedAt(previous => ({ ...previous, [item.id]: Date.now() }))
+      setFailureImage(current => current?.id === item.id ? null : current)
+      await query.invalidateQueries({ queryKey: ['images'] })
+      const feedback = inspectionFeedback(item)
+      toast[feedback.type](feedback.message)
+    },
+    onError: async (error: Error) => {
+      toast.error(error.message)
+      await query.invalidateQueries({ queryKey: ['images'] })
+    },
   })
   const remove = useMutation({
     mutationFn: api.removeImage,
@@ -66,11 +89,12 @@ export default function ImagePage() {
   })
   const upload = useMutation({
     mutationFn: (file: File) => api.uploadImageTar(file, setUploadProgress),
-    onSuccess: async () => {
+    onSuccess: async item => {
       setArchive(null)
       setUploadProgress(0)
       await query.invalidateQueries({ queryKey: ['images'] })
-      toast.success('Image uploaded. Wait for its security check before deployment.')
+      const feedback = inspectionFeedback(item)
+      toast[feedback.type](feedback.message)
     },
     onError: (error: Error) => toast.error(error.message),
   })
@@ -86,9 +110,9 @@ export default function ImagePage() {
     ? harborReport.vulnerabilities as Record<string, unknown>[] : []
   const columns = [
     { title: 'Submitted image', dataIndex: 'submittedReference', key: 'submittedReference', render: (value: string) => <Text className="image-reference" copyable={{ text: value }}>{value}</Text> },
-    { title: <span>Security check <HelpHint title="Security check">Approved images can be deployed. If an image is Rejected, select View report to see the findings. If inspection Failed, select View failure and try submitting again after addressing the reason.</HelpHint></span>, key: 'scan', render: (_: unknown, item: ImageArtifact) => <Space direction="vertical" size={2}>
+    { title: <span>Security check <HelpHint title="Security check">Approved images can be deployed. If an image is Rejected, select View report and fix the image. If inspection Failed, select View failure, address the cause, then use Retry scan. Resubmitting the same image does not start a new scan.</HelpHint></span>, key: 'scan', render: (_: unknown, item: ImageArtifact) => <Space direction="vertical" size={2}>
       <Tag color={item.scanStatus === 'Approved' ? 'green' : item.scanStatus === 'Rejected' || item.scanStatus === 'Failed' ? 'red' : 'blue'}>{scanLabel(item)}</Tag>
-      {scanDetails(item) && <Text type="secondary" className="scan-details">{scanDetails(item)}</Text>}
+      {scanDetails(item, scanObservedAt[item.id]) && <Text type="secondary" className="scan-details">{scanDetails(item, scanObservedAt[item.id])}</Text>}
     </Space> },
     { title: 'Pinned digest', dataIndex: 'platformDigest', key: 'platformDigest', render: (value: string) => <Text className="image-digest" copyable={{ text: value }}>{value.slice(-23)}</Text> },
     { title: 'Submitted', dataIndex: 'createdAt', key: 'createdAt', render: (value: string) => new Date(value).toLocaleString('en-GB') },
@@ -99,17 +123,20 @@ export default function ImagePage() {
       </>}
       {item.scanStatus === 'Failed' && <>
         <Button size="small" onClick={() => { setFailureImage(item); failure.mutate(item.id) }}>View failure</Button>
+        <Button size="small" loading={retryScan.isPending && retryScan.variables === item.id} disabled={retryScan.isPending || remove.isPending}
+          onClick={() => retryScan.mutate(item.id)}>Retry scan</Button>
         <a href={`/api/v1/images/${encodeURIComponent(item.id)}/scan-failure?download=1`}>Download JSON</a>
       </>}
       <Popconfirm title="Remove this image?" description="Images used by an app cannot be removed. Build history will remain, but its image can no longer be deployed."
         okText="Remove" cancelText="Keep" onConfirm={() => remove.mutate(item.id)}>
-        <DisabledReason reason={item.scanStatus === 'PendingScan' ? 'Wait for the security check to finish before removing this image.' : undefined}><Button size="small" danger disabled={item.scanStatus === 'PendingScan' || remove.isPending}>Remove</Button></DisabledReason>
+        <DisabledReason reason={item.scanStatus === 'PendingScan' ? 'Wait for the security check to finish before removing this image.' : undefined}><Button size="small" danger disabled={item.scanStatus === 'PendingScan' || remove.isPending || retryScan.isPending}>Remove</Button></DisabledReason>
       </Popconfirm>
     </Space> },
   ]
   return <>
     {context}
     <div className="page-heading"><div><span className="eyebrow">CONTAINER IMAGES</span><Title level={2}>My images</Title><Paragraph type="secondary">Upload a Docker image tar or submit a registry reference. PolyGate stores the image privately and checks it before deployment.</Paragraph></div></div>
+    <RuntimeRequirements volumeAvailable={me.data?.volumeAvailable} />
     {!me.data?.imageDeploymentAvailable && <Alert type="info" showIcon className="image-access-note" message="Image deployment is not enabled for this account" description="You may inspect images, but cannot deploy them until a platform administrator enables image deployment for your account." />}
     {me.data?.mode === 'authenticated' ? <Card className="form-card image-submit-card" title={<span>Inspect an image <HelpHint title="Image reference">If your image is already in a container registry, enter its full address and tag, for example registry-1.docker.io/library/nginx:stable. The image must pass the security check before deployment.</HelpHint></span>}>
       <Space.Compact className="image-submit-row"><Input aria-label="Container image reference" value={reference} maxLength={512} placeholder="registry-1.docker.io/library/my-agent:1.0" onChange={event => setReference(event.target.value)} onPressEnter={() => { if (reference.trim()) inspect.mutate(reference.trim()) }} /><DisabledReason reason={!reference.trim() ? 'Enter an image reference first.' : undefined}><Button type="primary" loading={inspect.isPending} disabled={!reference.trim()} onClick={() => inspect.mutate(reference.trim())}>Inspect image</Button></DisabledReason></Space.Compact>

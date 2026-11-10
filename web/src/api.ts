@@ -17,6 +17,8 @@ export type AppSpec = {
   secretKeys?: string[]
 }
 
+export type AppStorage = { persistent: boolean; volumeId?: string; mountPath?: string }
+
 export type VolumeSpec = { name: string; sizeGiB: number }
 export type Volume = {
   id: string
@@ -322,6 +324,9 @@ export const api = {
   inspectImage: (reference: string) => request<ImageArtifact>('/images/inspect', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reference }),
   }),
+  retryImageScan: (id: string) => request<ImageArtifact>(`/images/${encodeURIComponent(id)}/retry-scan`, {
+    method: 'POST', headers: { 'Idempotency-Key': crypto.randomUUID() },
+  }),
   imageScanReport: (id: string) => request<Record<string, unknown>>(`/images/${encodeURIComponent(id)}/scan-report`),
   uploadImageTar: async (file: File, onProgress?: (percent: number) => void) => {
     if (!file.name.toLowerCase().endsWith('.tar') || file.size < 1 || file.size > 1024 * 1024 * 1024) {
@@ -375,6 +380,10 @@ export const api = {
   updateAppRuntime: ({ appId, port, healthPath }: { appId: string; port: number; healthPath: string }) =>
     request<App>(`/apps/${encodeURIComponent(appId)}/runtime`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ port, healthPath }),
+    }),
+  updateAppStorage: ({ appId, storage }: { appId: string; storage: AppStorage }) =>
+    request<App>(`/apps/${encodeURIComponent(appId)}/storage`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(storage),
     }),
   updateRunningResources: ({ appId, resources, strategy }: { appId: string; resources: Resources; strategy: 'Rolling' | 'Recreate' }) =>
     request<DeploymentTask>(`/apps/${encodeURIComponent(appId)}/update-resources`, {

@@ -3,7 +3,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { Alert, Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Progress, Select, Space, Spin, Switch, Table, Typography, message } from 'antd'
 import { NavLink, Route, Routes, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ApiError, api, errorGuidance, type AccountActualUsage, type App as AppRecord, type AppEvent, type AppSpec, type BuildTemplate, type Me, type Operation, type PodMetric, type Resources, type SourceBuild, type Volume } from './api'
+import { ApiError, api, errorGuidance, type AccountActualUsage, type App as AppRecord, type AppEvent, type AppSpec, type AppStorage, type BuildTemplate, type Me, type Operation, type PodMetric, type Resources, type SourceBuild, type Volume } from './api'
 import ImagePage from './ImagePage'
 import AdminAccountsPage from './AdminAccountsPage'
 import AdminResourcesPage from './AdminResourcesPage'
@@ -11,6 +11,8 @@ import AdminAppsPage from './AdminAppsPage'
 import ActivityPage from './ActivityPage'
 import HelpPage from './HelpPage'
 import { DisabledReason, HelpHint } from './HelpHint'
+import RuntimeRequirements from './RuntimeRequirements'
+import { availableStorageVolumes, storagePayload } from './deploymentSupport'
 
 const { Title, Text, Paragraph } = Typography
 
@@ -144,10 +146,13 @@ function Overview() {
   const [rollbackRevisionId, setRollbackRevisionId] = useState<string | undefined>()
   const [editingApp, setEditingApp] = useState<AppRecord | null>(null)
   const [editingRuntime, setEditingRuntime] = useState<AppRecord | null>(null)
+  const [editingStorage, setEditingStorage] = useState<AppRecord | null>(null)
   const [restartAppId, setRestartAppId] = useState<string | null>(null)
   const [restartStrategy, setRestartStrategy] = useState<'Rolling' | 'Recreate'>('Recreate')
   const [resourceForm] = Form.useForm<{ resources: Resources; strategy: 'Rolling' | 'Recreate' }>()
   const [runtimeForm] = Form.useForm<{ port: number; healthPath: string }>()
+  const [storageForm] = Form.useForm<AppStorage>()
+  const storagePersistent = Form.useWatch('persistent', storageForm)
   const revisions = useQuery({ queryKey: ['revisions', rollbackAppId], queryFn: () => api.appRevisions(rollbackAppId!), enabled: rollbackAppId !== null })
   const [logsApp, setLogsApp] = useState<AppRecord | null>(null)
   const [selectedLogPod, setSelectedLogPod] = useState('')
@@ -199,11 +204,17 @@ function Overview() {
   const rollingBack = useMutation({ mutationFn: api.rollbackRevision, onSuccess: async () => { await Promise.all([query.invalidateQueries({ queryKey: ['apps'] }), query.invalidateQueries({ queryKey: ['revisions', rollbackAppId] })]); setRollbackAppId(null); setRollbackRevisionId(undefined); toast.success('Version restore queued') }, onError: (error: Error) => toast.error(error.message) })
   const editingResources = useMutation({ mutationFn: api.updateAppResources, onSuccess: async () => { await Promise.all([query.invalidateQueries({ queryKey: ['apps'] }), query.invalidateQueries({ queryKey: ['me'] })]); setEditingApp(null); toast.success('Resource settings saved') }, onError: (error: Error) => toast.error(error.message) })
   const editingRuntimeMutation = useMutation({ mutationFn: api.updateAppRuntime, onSuccess: async () => { await Promise.all([query.invalidateQueries({ queryKey: ['apps'] }), query.invalidateQueries({ queryKey: ['operations'] })]); setEditingRuntime(null); toast.success('App port and health path saved. Deploy the image again to retry.') }, onError: (error: Error) => toast.error(error.message) })
+  const editingStorageMutation = useMutation({ mutationFn: api.updateAppStorage, onSuccess: async () => {
+    await Promise.all([query.invalidateQueries({ queryKey: ['apps'] }), query.invalidateQueries({ queryKey: ['volumes'] }), query.invalidateQueries({ queryKey: ['operations'] })])
+    setEditingStorage(null)
+    toast.success('Storage settings saved. Deploy the approved image to apply them.')
+  } })
   const updatingResources = useMutation({ mutationFn: api.updateRunningResources, onSuccess: async () => { await query.invalidateQueries({ queryKey: ['apps'] }); setEditingApp(null); toast.success('Resource update queued') }, onError: (error: Error) => toast.error(error.message) })
   const restarting = useMutation({ mutationFn: api.restartApp, onSuccess: async () => { await query.invalidateQueries({ queryKey: ['apps'] }); setRestartAppId(null); toast.success('Restart queued') }, onError: (error: Error) => toast.error(error.message) })
   const stopping = useMutation({ mutationFn: api.stopApp, onSuccess: async () => { await query.invalidateQueries({ queryKey: ['apps'] }); toast.success('Stop requested') }, onError: (error: Error) => toast.error(error.message) })
   if (me.isPending || apps.isPending) return <div className="center"><Spin size="large" /></div>
   if (me.error || apps.error) return <Alert type="error" showIcon message="Could not load your workspace" description={(me.error ?? apps.error)?.message} />
+  const storageVolumes = availableStorageVolumes(accountVolumes.data ?? [], apps.data, editingStorage?.id)
   const columns = [
     { title: t('appName'), dataIndex: ['spec', 'name'], key: 'name', render: (name: string) => <strong>{name}</strong> },
     { title: 'Draft image', dataIndex: ['spec', 'image'], key: 'image', ellipsis: true },
@@ -235,6 +246,12 @@ function Overview() {
         <Button type="link" size="small" onClick={() => { resourceForm.setFieldsValue({ resources: item.spec.resources, strategy: 'Rolling' }); setEditingApp(item) }}>Edit resources</Button>}
       {['Draft', 'Stopped', 'Failed'].includes(item.status) &&
         <Button type="link" size="small" onClick={() => { runtimeForm.setFieldsValue({ port: item.spec.port, healthPath: item.spec.healthPath ?? '' }); setEditingRuntime(item) }}>Edit port</Button>}
+      {me.data.volumeAvailable && ['Draft', 'Stopped', 'Failed'].includes(item.status) &&
+        <Button type="link" size="small" onClick={() => {
+          editingStorageMutation.reset()
+          storageForm.setFieldsValue({ persistent: item.spec.persistent, volumeId: item.spec.volumeId, mountPath: item.spec.mountPath || '/data' })
+          setEditingStorage(item)
+        }}>Edit storage</Button>}
       {['Queued', 'Deploying', 'Running'].includes(item.status) &&
         <Popconfirm title={item.status === 'Running' ? 'Stop this app?' : 'Cancel this deployment?'} description={item.spec.persistent ? 'The app workload will be removed. Its volume and data will remain available.' : 'The app workload will be removed and its reserved resources released after cleanup.'} okText={item.status === 'Running' ? 'Stop' : 'Cancel deployment'} cancelText="Back" onConfirm={() => stopping.mutate(item.id)}><Button type="link" size="small" loading={stopping.isPending && stopping.variables === item.id}>{item.status === 'Running' ? 'Stop' : 'Cancel deployment'}</Button></Popconfirm>}
       {(item.status === 'Draft' || item.status === 'Stopped' || item.status === 'Failed') &&
@@ -285,6 +302,33 @@ function Overview() {
       <Form<{ port: number; healthPath: string }> form={runtimeForm} layout="vertical" onFinish={values => { if (editingRuntime) editingRuntimeMutation.mutate({ appId: editingRuntime.id, port: values.port, healthPath: values.healthPath ?? '' }) }}>
         <Form.Item label="App port" name="port" rules={[{ required: true, message: 'Enter the listening port.' }]}><InputNumber min={1} max={65535} style={{ width: '100%' }} /></Form.Item>
         <Form.Item label="HTTP health path (optional)" name="healthPath" rules={[{ pattern: /^\/(?!\/)(?!.*\.\.)(?:[A-Za-z0-9/_\.~-]*)$/, message: 'Enter an absolute path without spaces, query or fragment.' }, { max: 128 }]}><Input placeholder="/health" maxLength={128} /></Form.Item>
+      </Form>
+    </Modal>
+    <Modal title={editingStorage ? `Edit storage: ${editingStorage.spec.name}` : 'Edit storage'} open={editingStorage !== null}
+      onCancel={() => { if (!editingStorageMutation.isPending) setEditingStorage(null) }}
+      closable={!editingStorageMutation.isPending} maskClosable={!editingStorageMutation.isPending}
+      onOk={() => storageForm.submit()} okText="Save storage" confirmLoading={editingStorageMutation.isPending}
+      okButtonProps={{ disabled: Boolean(storagePersistent && (accountVolumes.isPending || accountVolumes.error || editingStorage?.spec.resources.replicas !== 1)) }}>
+      <Paragraph>Change the volume for the next deployment. A failed deployment must finish cleanup before storage can be changed. Existing volume files are kept; changing or removing a binding does not copy or delete them.</Paragraph>
+      <RuntimeRequirements volumeAvailable={me.data.volumeAvailable} />
+      {editingStorageMutation.error && <Alert type="error" showIcon message="Could not save storage"
+        description={editingStorageMutation.error instanceof ApiError && editingStorageMutation.error.code === 'APP_CLEANUP_PENDING'
+          ? 'The failed deployment is still being cleaned up. Wait for cleanup to finish, then save again. If this continues, ask the administrator to check the app cleanup task.'
+          : editingStorageMutation.error.message} style={{ marginBottom: 16 }} />}
+      <Form<AppStorage> form={storageForm} layout="vertical" onFinish={values => {
+        if (editingStorage) editingStorageMutation.mutate({ appId: editingStorage.id, storage: storagePayload(values) })
+      }}>
+        <Form.Item label="Use persistent storage" name="persistent" valuePropName="checked"><Switch /></Form.Item>
+        {storagePersistent && <>
+          {editingStorage?.spec.resources.replicas !== 1 && <Alert type="warning" showIcon message="Set replicas to 1 first" description={editingStorage?.status === 'Failed' ? 'A persistent app needs one replica. Ask the administrator to help update the resource settings of this failed app before attaching a volume.' : 'Close this dialog and use Edit resources to set one replica before attaching a volume.'} style={{ marginBottom: 16 }} />}
+          {accountVolumes.error && <Alert type="error" showIcon message="Could not load volumes" description={accountVolumes.error.message} style={{ marginBottom: 16 }} />}
+          <Form.Item label="Volume" name="volumeId" rules={[{ required: true, message: 'Select a ready volume.' }]}>
+            <Select loading={accountVolumes.isPending} placeholder="Select a ready volume" options={storageVolumes.map(volume => ({ value: volume.id, label: `${volume.spec.name} (${volume.spec.sizeGiB} GiB)` }))} />
+          </Form.Item>
+          <Form.Item label="Mount path" name="mountPath" extra="Configure your app to write to this directory. Do not cover its program files."
+            rules={[{ required: true, pattern: /^\/(?!proc(?:\/|$)|sys(?:\/|$)|dev(?:\/|$)|tmp(?:\/|$)|run(?:\/|$)|var\/run(?:\/|$))[A-Za-z0-9/_-]+$/, message: 'Use a safe absolute path such as /data.' }]}><Input placeholder="/data" /></Form.Item>
+          {!accountVolumes.isPending && !accountVolumes.error && storageVolumes.length === 0 && <Paragraph>No ready, unused volume is available. <NavLink to="/volumes">Create a volume</NavLink> and wait for Ready.</Paragraph>}
+        </>}
       </Form>
     </Modal>
     <Modal title={logsApp ? `Diagnostics: ${logsApp.spec.name}` : 'Application diagnostics'} open={logsApp !== null}
@@ -388,6 +432,7 @@ function NewApp() {
   return <>
     {context}
     <div className="page-heading"><div><span className="eyebrow">APPLICATIONS</span><Title level={2}>{t('newAppTitle')}</Title><Paragraph type="secondary">{t('newAppIntro')}</Paragraph></div></div>
+    <RuntimeRequirements volumeAvailable={me.data?.volumeAvailable} />
     {sourceArtifactId && (images.isPending ? <Alert type="info" showIcon message="Checking the built image" />
       : sourceImage?.scanStatus === 'Approved' ? <Alert type="success" showIcon message="Approved build selected" description="Enter the port your program listens on: Python template 8000, Node.js template 3000, or the port in your Dockerfile. Submitting will create the draft and queue deployment." />
         : <Alert type="warning" showIcon message="Build image is not approved" description="Wait for its security scan on My images before creating and deploying this app." />)}
@@ -424,7 +469,7 @@ function NewApp() {
           <Form.Item label={<span>{t('memory')} <HelpHint title="Memory limit">The maximum RAM available to each running copy of your app. Start with 1024 MiB (about 1 GiB); choose more only if the app needs it.</HelpHint></span>} name={['resources', 'memoryMiB']} rules={[{ required: true }]}><Select options={[128, 256, 512, 1024, 2048, 3072, 4096].map(n => ({ value: n, label: `${n} MiB${n === 4096 ? ' (maximum)' : ''}` }))} /></Form.Item>
           <Form.Item label={<span>{t('replicas')} <HelpHint title="Replicas">A replica is one running copy of your app. Choose 1 unless you need extra capacity. Apps using a persistent volume must use 1.</HelpHint></span>} name={['resources', 'replicas']} rules={[{ required: true }]}><Select options={(persistent ? [1] : [1, 2]).map(n => ({ value: n, label: `${n}` }))} /></Form.Item>
         </div>
-        {me.data?.volumeAvailable && <Form.Item label={<span>{t('persistent')} <HelpHint title="Keep files after restart">Turn this on only if your app saves files that must survive a restart. Create a volume on the Volumes page first, then select it below.</HelpHint></span>} name="persistent" valuePropName="checked"><Switch onChange={checked => { if (checked) form.setFieldValue(['resources', 'replicas'], 1); else form.setFieldsValue({ volumeId: undefined, mountPath: undefined }) }} /></Form.Item>}
+        {me.data?.volumeAvailable && <Form.Item label={<span>{t('persistent')} <HelpHint title="Writable files and persistence">The root filesystem is read-only. Use /tmp for disposable files, or create and select a volume for a database or files to keep. Configure the app to write to the volume's mount path.</HelpHint></span>} name="persistent" valuePropName="checked"><Switch onChange={checked => { if (checked) form.setFieldValue(['resources', 'replicas'], 1); else form.setFieldsValue({ volumeId: undefined, mountPath: undefined }) }} /></Form.Item>}
         {me.data?.volumeAvailable && persistent && <>
           <Alert type="info" showIcon style={{ marginBottom: 16 }} message="One app per volume" description="Stopping or deleting the app keeps the volume and its data. Select a ready, unused volume." />
           {volumes.error && <Alert type="error" showIcon message="Could not load volumes" description={volumes.error.message} />}
@@ -629,6 +674,7 @@ function SourcePage() {
   return <>
     {context}
     <div className="page-heading"><div><span className="eyebrow">SOURCE BUILD</span><Title level={2}>{buildEnabled ? 'Build from a source ZIP' : t('zipTitle')}</Title><Paragraph type="secondary">{buildEnabled ? 'Upload a trusted source ZIP, choose a build method, then review the build log and image scan before deployment.' : t('zipIntro')}</Paragraph></div></div>
+    <RuntimeRequirements volumeAvailable={me.data?.volumeAvailable} />
     {buildEnabled && <Card className="form-card" title={<span>Build method <HelpHint title="Choose a build method">Use my Dockerfile if your ZIP contains one at the top level. Choose Python or Node.js template if you have source files but no Dockerfile. The required files are listed below the selector.</HelpHint></span>}>
       <Select<BuildTemplate> aria-label="Build method" value={template} style={{ width: '100%', maxWidth: 420 }} onChange={setTemplate} options={[
         { value: 'dockerfile', label: 'Use my Dockerfile' },
