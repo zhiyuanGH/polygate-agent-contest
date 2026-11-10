@@ -2,6 +2,10 @@
 
 PolyGate is a container platform for student agent projects. Students can submit a public container image or a source ZIP, review build and scan results, and deploy approved images with resource limits. The console is written in React and TypeScript; the API and workers are written in Go.
 
+## Student guides
+
+The [English step-by-step guide](docs/PolyGate_Student_Walkthrough_EN.md) and [中文图文指南](docs/PolyGate_学生全流程图文指南_ZH.md) show the complete workflow with screenshots. For a shorter reference, see the [quick start](docs/PolyGate_Student_Quick_Start.md).
+
 ## Local development
 
 Requirements: Go 1.27, Node.js 22 or later, and npm.
