@@ -26,4 +26,7 @@ For apps served at `/<username>/<app-name>/`, read the [base path compatibility 
 
 ## Contributing
 
+The [collaborative delivery guide](docs/CONTINUAL_DEPLOYMENT.md) explains the
+PR checks, Web release flow, production verification, and rollback.
+
 Start with [DEVELOPMENT.md](DEVELOPMENT.md) or [中文开发交接文档](DEVELOPMENT.zh-CN.md), then see [CONTRIBUTING.md](CONTRIBUTING.md). Never commit passwords, tokens, private keys, kubeconfigs, account exports, or production snapshots. No public license has been selected yet; please ask the maintainers before reusing this code outside the project.
